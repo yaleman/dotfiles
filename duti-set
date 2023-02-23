@@ -1,12 +1,19 @@
 #!/bin/bash
 
+# this sets the default handlers for file types on this system, put config files in
+
 DIRNAME=$(dirname "$0")
 
+if [ -z "$(which duti)" ]; then
+    echo "Couldn't find duti! brew install duti"
+    exit 1
+fi
 
 if [ ! -f "${DIRNAME}/duti/duti-defaults" ]; then
     echo "Can't find duti-defaults, bailing!"
     exit 1
 fi
+
 echo "Loading files from ${DIRNAME}/duti"
 
 duti -v "${DIRNAME}/duti"
