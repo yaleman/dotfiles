@@ -1,0 +1,12 @@
+#!/bin/bash
+
+DIRNAME=$(dirname "$0")
+
+
+if [ ! -f "${DIRNAME}/duti/duti-defaults" ]; then
+    echo "Can't find duti-defaults, bailing!"
+    exit 1
+fi
+echo "Loading files from ${DIRNAME}/duti"
+
+duti -v "${DIRNAME}/duti"
