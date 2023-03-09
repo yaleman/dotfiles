@@ -6,8 +6,8 @@ CURL_DIR="$(find /opt/homebrew/Cellar/curl -maxdepth 1 -mindepth 1 -type d | hea
 if [ -z "${CURL_DIR}" ]; then
     echo "Couldn't find curl"
     exit 1
-else
-    echo "Found curl dir: ${CURL_DIR}"
+#else
+#    echo "Found curl dir: ${CURL_DIR}"
 fi
 
 PATH="${CURL_DIR}/bin:$PATH"
