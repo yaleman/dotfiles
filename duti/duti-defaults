@@ -1,3 +1,4 @@
 com.microsoft.VSCode public.python-script all
 com.microsoft.VSCode public.xml all
+com.microsoft.VSCode public.yaml all
 com.microsoft.VSCode public.json all
