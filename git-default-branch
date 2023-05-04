@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# gets the default branch from the $1 remote - defaults to "origin"
+
+
+if [ -z "${1}" ]; then
+	REMOTE="origin"
+else
+	REMOTE="${1}"
+fi
+
+git symbolic-ref "refs/remotes/${REMOTE}/HEAD" | sed "s@^refs/remotes/${REMOTE}/@@"

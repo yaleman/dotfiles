@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# do the rebase dance
+set -e
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+git fetch  && \
+    git rebase "origin/${CURRENT_BRANCH}" && \
+    git push
