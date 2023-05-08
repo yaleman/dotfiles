@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC -//Apple Computer//DTD PLIST 1.0//EN http://www.apple.com/DTDs/PropertyList-1.0.dtd>
+<!-- copied from https://apple.stackexchange.com/a/58675 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>timemachine_eject</string>
+    <key>Program</key>
+    <!--
+    link the binary from the repository with
+    sudo ln -s $(pwd)/timemachine_eject /usr/local/bin/
+    -->
+    <string>/usr/local/bin/timemachine_eject</string>
+    <key>StartInterval</key>
+    <!-- Change this to a higher number like 43200 (run every 12 hours) once you've confirmed it works. -->
+    <integer>28800</integer> <!-- run every 8 hours. -->
+</dict>
+</plist>

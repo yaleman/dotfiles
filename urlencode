@@ -1,0 +1,13 @@
+STRINGVAL="${1}"
+STRLEN=${#STRINGVAL}
+ENCODED=""
+
+for (( pos=0 ; pos<STRLEN ; pos++ )); do
+c="${STRINGVAL:$pos:1}"
+case "$c" in
+    [-_.~a-zA-Z0-9] ) o="${c}" ;;
+    * )               printf -v o '%%%02x' "'$c"
+esac
+ENCODED+="${o}"
+done
+echo "${ENCODED}"
