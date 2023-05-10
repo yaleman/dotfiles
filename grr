@@ -3,8 +3,15 @@
 # do the rebase dance
 set -e
 
+if [ -z "${1}" ]; then
+	REMOTE="$(git remote)"
+else
+	REMOTE="${1}"
+fi
+
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
+echo "Rebasing from ${REMOTE}/${CURRENT_BRANCH}"
 git fetch  && \
-    git rebase "origin/${CURRENT_BRANCH}" && \
+    git rebase "${REMOTE}/${CURRENT_BRANCH}" && \
     git push
