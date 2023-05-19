@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+# the dotfiles dir
+MYDIR="$(dirname "${0}")"
+
+brew bundle dump --force --file="$MYDIR/Brewfile"
