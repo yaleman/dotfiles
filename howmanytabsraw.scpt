@@ -58,7 +58,7 @@ on run argv
 		--do shell script
 		hostName
 		--\"host\":\"" & hostName & "\",
-		set dataValue to "{\"tabs\":" & tabCountTotal & ", \"windows\":" & windowCount & "}"
+		set dataValue to "{\"browser\" : \"safari\", \"tabs\":" & tabCountTotal & ", \"windows\":" & windowCount & "}"
 		set authHeader to "Authorization: Splunk " & hecToken
 
 		set outputValue to do shell script "/usr/bin/curl -s -v -H " & quoted form of authHeader & " --data " & quoted form of dataValue & " " & quoted form of baseURL
