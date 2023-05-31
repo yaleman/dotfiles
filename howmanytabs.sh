@@ -2,9 +2,13 @@
 
 set -e
 
+
+
 function safariTabs () {
+    MYDIR="$(dirname "$0")"
+
     #shellcheck disable=SC2069
-    osascript howmanytabsraw 2>&1 >/dev/null
+    osascript "${MYDIR}/howmanytabsraw" 2>&1 >/dev/null
 }
 
 
