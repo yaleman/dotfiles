@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if [ ! -d .git ]; then
+	echo "Not a git repo!"
+	exit 1
+fi
+
+git log --pretty=tformat: --numstat  \
+	| rg -v '^0\s+0\s+' \
+	| rg -v '^-\s+-\s+' \
+	| awk '{ adds+=$1; deletes+=$2 } END { print "adds: " adds, "deletes: " deletes }'
+# example adds: 425101 deletes: 179453
