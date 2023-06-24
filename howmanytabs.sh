@@ -15,14 +15,13 @@ function safariTabs () {
 #shellcheck disable=SC2069
 safariTabs 2>&1 > /dev/null
 
-if [ "$(ps aux | rg -c 'Microsoft Edge\.app')" -gt 1 ]; then
-    # TODO: finish using chrome-cli to do chrome/edge tabs
+if [ "$(ps aux | /opt/homebrew/bin/rg 'Microsoft Edge\.app' | wc -l)" -gt 1 ]; then
     export CHROME_BUNDLE_IDENTIFIER="com.microsoft.edgemac"
 
     # https://github.com/prasmussen/chrome-cli
 
-    TABS=$(chrome-cli list tabs | wc -l)
-    WINDOWS=$(chrome-cli list windows | wc -l)
+    TABS=$(/opt/homebrew/bin/chrome-cli list tabs | wc -l)
+    WINDOWS=$(/opt/homebrew/bin/chrome-cli list windows | wc -l)
     HEC_HOST="$(plutil -extract hecHost raw -expect string ~/.config/howmanytabs.plist)"
     HEC_TOKEN="$(plutil -extract hecToken raw -expect string ~/.config/howmanytabs.plist)"
     HEC_PORT="$(plutil -extract hecPort raw -expect string ~/.config/howmanytabs.plist)"
