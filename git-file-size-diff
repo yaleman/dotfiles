@@ -6,7 +6,7 @@ Show file size changes between two commits or the index and a commit.'
 # shellcheck disable=SC1091
 . "$(git --exec-path)/git-sh-setup"
 args=$(git rev-parse --sq "$@")
-[ -n "$args" ] || usage
+[ -n "$args" ] || echo "${USAGE}" >&2 && exit 2
 cmd="diff-tree -r"
 [[ $args =~ "--cached" ]] && cmd="diff-index"
 eval "git $cmd $args" | {
@@ -18,7 +18,7 @@ eval "git $cmd $args" | {
       A) bytes=$(git cat-file -s "$D") ;;
       D) bytes=-$(git cat-file -s "$C") ;;
       *)
-        echo >&2 warning: unhandled mode "$M" in \"$A $B $C $D $M $P\"
+        echo >&2 warning: unhandled mode "$M" in "$A $B $C $D $M $P"
         continue
         ;;
     esac
