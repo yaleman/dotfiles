@@ -3,22 +3,41 @@ USAGE='[--cached] [<rev-list-options>...]
 
 Show file size changes between two commits or the index and a commit.'
 
-# shellcheck disable=SC1091
-. "$(git --exec-path)/git-sh-setup"
-args=$(git rev-parse --sq "$@")
-[ -n "$args" ] || echo "${USAGE}" >&2 && exit 2
+cli_args=()
+DEBUG=0
+for arg in "$@"
+do
+  # If the current option is not "--debug", then it is added to the new list of options
+  if [[ "$arg" != "--debug" ]]; then
+    cli_args+=("$arg")
+    DEBUG=1
+  fi
+done
+
+args=$(git rev-parse --sq "${cli_args[@]}")
+if [ -z "$args" ]; then
+  echo "${USAGE}" >&2
+  exit 1
+fi
 cmd="diff-tree -r"
 [[ $args =~ "--cached" ]] && cmd="diff-index"
+
+
+if [ "${DEBUG}" -eq 1 ]; then
+  echo "Running git $cmd $args" >&2
+fi
+
 eval "git $cmd $args" | {
   total=0
   while read -r A B C D M P
   do
+    echo "$M"
     case $M in
       M) bytes=$(( $(git cat-file -s "$D") - $(git cat-file -s "$C") )) ;;
       A) bytes=$(git cat-file -s "$D") ;;
       D) bytes=-$(git cat-file -s "$C") ;;
       *)
-        echo >&2 warning: unhandled mode "$M" in "$A $B $C $D $M $P"
+        echo >&2 "warning: unhandled mode \"$M\" in $A $B $C $D $M $P - did you perhaps miss a rev list option?"
         continue
         ;;
     esac
