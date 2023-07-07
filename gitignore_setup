@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+
+import os
+from pathlib import Path
+import re
+import sys
+
+from loguru import logger
+
+GITIGNORE = ".gitignore"
+
+# check we're in a git dir
+if not os.path.exists("./.git/"):
+    logger.error("You're not in a git repository, quitting.")
+    sys.exit(1)
+
+try:
+    # check if the user wants to create a .gitignore file
+    if not os.path.exists(GITIGNORE):
+        logger.warning("{} doesn't exist", GITIGNORE)
+        response = ""
+        while response not in ("y", "n"):
+            logger.info("Do you want to create it? (y/n) ")
+            response = input().lower().strip()
+        if response == "n":
+            logger.info("Ok, quitting")
+            sys.exit(1)
+        Path(GITIGNORE).touch(mode=0o644, exist_ok=True)
+except KeyboardInterrupt:
+    sys.exit(0)
+
+def read_file():
+    """ reads the .gitignore file """
+    with open(GITIGNORE, encoding="utf8") as gitignore_fh:
+        return [ line.strip() for line in gitignore_fh.readlines()]
+
+EXPECTED_LINES = [
+    ".vscode/",
+    ".DS_Store",
+    "config.py",
+    "dist/",
+    ".env",
+    ".envrc",
+]
+
+# if the key regex matches filenames in the directory, add these
+FILE_MATCHERS = {
+    "\.tf$" : [
+        "terraform.tfstate*"
+    ],
+    "^(\.venv|pyproject\.toml)$" : [
+        "build/",
+        "dist/",
+        "*.egg-info/",
+        "**/__pycache__/*",
+        ".venv",
+    ],
+    "^Cargo\.toml" : [
+        "target/",
+    ]
+}
+
+filecontents = read_file()
+
+needtoadd = []
+for line in EXPECTED_LINES:
+    if line not in filecontents and line not in needtoadd:
+        needtoadd.append(line)
+
+
+for matcher in FILE_MATCHERS:
+    compiled_re = re.compile(matcher)
+    matched = False
+    for filename in os.listdir("./"):
+        if compiled_re.match(filename):
+            matched = True
+            break
+    if matched:
+        for line in FILE_MATCHERS[matcher]:
+            if line not in filecontents and line not in needtoadd:
+                needtoadd.append(line)
+
+if not needtoadd:
+    logger.info("File is OK!")
+    sys.exit()
+
+logger.info("Adding the following lines:")
+with open(GITIGNORE, "a", encoding="utf8") as gitignore_fh:
+    for line in needtoadd:
+        logger.info(line)
+    gitignore_fh.writelines([ f"{line}\n" for line in needtoadd])
