@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+if [ -z "$1" ]; then
+    find "$(pwd)" -type d -maxdepth 1 -mindepth 1 -exec "$0" "{}" \;
+else
+    DIRNAME="$1"
+    if [ ! -d "${DIRNAME}" ]; then
+        echo "Uh, ${DIRNAME} is missing or not a directory?"
+        exit 1
+    fi
+    echo "Checking '${DIRNAME}'"
+
+    if [ "$(git -C "${DIRNAME}" rev-parse --is-inside-work-tree 2>/dev/null)" != "true" ]; then
+        echo "Not a git repo, skipping"
+        exit 0
+    fi
+
+    # check if there's anything uncommitted
+    if [ -n "$(git -C "${DIRNAME}" status --porcelain)" ]; then
+        echo "Uncommitted changes in ${DIRNAME}, skipping"
+        exit 0
+    fi
+    # run git pull
+    git -C "${DIRNAME}" pull
+    # show which branch it's on
+    echo "Completed ${DIRNAME} - branch is $(git -C "${DIRNAME}" branch --show-current)"
+fi
+
+
+
