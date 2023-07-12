@@ -2,13 +2,28 @@
 
 set -e
 
-
+if [ -z "${DEBUG}" ]; then
+    DEBUG=0
+fi
 
 function safariTabs () {
     MYDIR="$(dirname "$0")"
 
-    #shellcheck disable=SC2069
-    osascript "${MYDIR}/howmanytabsraw" 2>&1 >/dev/null
+    if [ ! -f "${MYDIR}/howmanytabsraw" ]; then
+        if [ "${DEBUG}" -eq 1 ]; then
+            echo "Compiling howmanytabsraw"
+        fi
+
+        make howmanytabs
+    fi
+
+
+    if [ "${DEBUG}" -eq 1 ]; then
+        osascript "${MYDIR}/howmanytabsraw"
+    else
+        #shellcheck disable=SC2069
+        osascript "${MYDIR}/howmanytabsraw" 2>&1 >/dev/null
+    fi
 }
 
 
@@ -28,7 +43,25 @@ if [ "$(ps aux | /opt/homebrew/bin/rg 'Microsoft Edge\.app' | wc -l)" -gt 1 ]; t
 
     DATA="{\"browser\" : \"chrome\", \"windows\": ${WINDOWS}, \"tabs\": ${TABS}}"
     AUTH_HEADER="Authorization: Splunk ${HEC_TOKEN}"
-    curl -sf "https://${HEC_HOST}:${HEC_PORT}/services/collector/raw?host=$(hostname -s)" \
+    HOSTNAME="$(hostname -s)"
+    if [ "${DEBUG}" -eq 1 ]; then
+        CURL_SILENT="-v"
+        LOG_DEST="/dev/stdout"
+    else
+        CURL_SILENT="-s"
+        LOG_DEST="/dev/null"
+    fi
+    if [ "${DEBUG}" -eq 1 ]; then
+        echo "Edge Data: ${DATA}"
+        echo "Sending to ${HEC_HOST}"
+        echo "I am ${HOSTNAME}"
+    fi
+
+    curl ${CURL_SILENT} -f "https://${HEC_HOST}:${HEC_PORT}/services/collector/raw?host=${HOSTNAME}" \
         -H "${AUTH_HEADER}" \
-        -d "${DATA}" > /dev/null
+        -d "${DATA}" > "${LOG_DEST}"
+else
+    if [ "${DEBUG}" -eq 1 ]; then
+        echo "Edge not running"
+    fi
 fi
