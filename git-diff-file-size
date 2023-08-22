@@ -1,0 +1,35 @@
+#!/bin/bash
+
+file_path="$1"
+
+if [ ! -e "$1" ]; then
+	echo "'$1' doesn't exist!"
+	exit 1
+fi
+size_before=$(git show "HEAD~1:$file_path" | wc -c)
+size_after=$(git show "HEAD:$file_path" | wc -c)
+difference=$((size_after - size_before))
+
+if [ "${difference}" -le 0 ]; then
+	difference_check=$((difference * -1))
+else
+	difference_check=$((difference))
+fi
+
+if [ $((difference_check)) -gt 1024 ]; then
+	difference=$(echo "scale=2; ${difference} / 1024" | bc)
+	difference_unit="KB"
+elif [ $((difference_check)) -gt 1048576 ]; then
+	difference=$(echo "scale=2; ${difference} / 1048576" | bc)
+	difference_unit="MB"
+else
+	difference_unit="B"
+fi
+
+ratio=$((100 - (size_after * 100 / size_before)))
+if [ $((size_after)) -gt $((size_before)) ]; then
+	RATIO_MOD="+"
+else
+	RATIO_MOD="-"
+fi
+echo "$file_path ${difference}${difference_unit} ${RATIO_MOD}${ratio}%"
