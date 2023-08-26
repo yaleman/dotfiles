@@ -1,15 +1,54 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
+
+set -e
+
+if [ -z "${1}" ]; then
+	git status | rg 'modified:' \
+		| awk '{print $2}' | rg '^\S+$' \
+		| xargs -n1 git-diff-file-size
+	exit 0
+fi
+
+if [ -d "${1}" ]; then
+	# echo "Passed a dir!"
+	git -C "${1}" status | rg 'modified:' \
+		| awk '{print $2}' | rg '^\S+$' \
+		| xargs -I{} git-diff-file-size "${1}/{}"
+	exit 0
+fi
+
+if [ "$(echo -n "${1}" | sed -e 's/[[:space:]]//' | wc -c)" -eq 0 ]; then
+	echo "git-diff-file-size was passed an empty string!" >&2
+	exit 0
+fi
 
 file_path="$1"
+if [ -n "${DEBUG}" ]; then
+	echo "git-diff-file-size '$1'"
+fi
+# exit 0
 
 if [ ! -e "$1" ]; then
 	echo "'$1' doesn't exist!"
 	exit 1
 fi
-size_before=$(git show "HEAD~1:$file_path" | wc -c)
-size_after=$(git show "HEAD:$file_path" | wc -c)
-difference=$((size_after - size_before))
 
+if [ "$(which git-file-ref | wc -l)" -eq 0 ]; then
+	echo "Can't find git-file-ref!"
+	exit 1
+fi
+
+# FILE_REF="$(git-file-ref "${file_path}")"
+# git show "HEAD~1:${FILE_REF}" > /dev/null || exit 1
+# git show "HEAD:${FILE_REF}" > /dev/null || exit 1
+
+# size_before="$(git show "HEAD~1:${FILE_REF}" | wc -c)"
+# size_after="$(git show "HEAD:${FILE_REF}" | wc -c)"
+export GIT_PAGER=cat
+REMOVALS="$(git diff "${file_path}" | grep -E '^-' | grep -vE '^--- a' | sed -e 's/^-//' |wc -c)"
+ADDITIONS="$(git diff "${file_path}" | grep -E '^\+' | grep -vE '^\+\+\+ b' | sed -e 's/^\+//' |wc -c)"
+
+difference=$((ADDITIONS-REMOVALS))
 if [ "${difference}" -le 0 ]; then
 	difference_check=$((difference * -1))
 else
@@ -26,10 +65,15 @@ else
 	difference_unit="B"
 fi
 
-ratio=$((100 - (size_after * 100 / size_before)))
-if [ $((size_after)) -gt $((size_before)) ]; then
+FILE_SIZE="$(wc -c "${file_path}" | awk '{print $1}')"
+ratio=$((100 * (difference_check / FILE_SIZE)))
+if [ $((ADDITIONS)) -gt $((REMOVALS)) ]; then
 	RATIO_MOD="+"
+	COLOUR='\e[1;31m'
 else
 	RATIO_MOD="-"
+	COLOUR='\e[1;32m'
 fi
-echo "$file_path ${difference}${difference_unit} ${RATIO_MOD}${ratio}%"
+echo -e "${COLOUR}${difference}${difference_unit} \e[0m \t${RATIO_MOD}${ratio}% \t${file_path}"
+
+
