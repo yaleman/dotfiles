@@ -38,16 +38,21 @@ if [ "$(which git-file-ref | wc -l)" -eq 0 ]; then
 	exit 1
 fi
 
-# FILE_REF="$(git-file-ref "${file_path}")"
-# git show "HEAD~1:${FILE_REF}" > /dev/null || exit 1
-# git show "HEAD:${FILE_REF}" > /dev/null || exit 1
-
-# size_before="$(git show "HEAD~1:${FILE_REF}" | wc -c)"
-# size_after="$(git show "HEAD:${FILE_REF}" | wc -c)"
+# text files
 export GIT_PAGER=cat
-REMOVALS="$(git diff "${file_path}" | grep -E '^-' | grep -vE '^--- a' | sed -e 's/^-//' |wc -c)"
-ADDITIONS="$(git diff "${file_path}" | grep -E '^\+' | grep -vE '^\+\+\+ b' | sed -e 's/^\+//' |wc -c)"
-
+REMOVALS="$(git diff --text "${file_path}" \
+	| rg --text '^-' \
+	| rg --text -v '^--- a' \
+	| dd 2>&1 \
+	| tail -n1 \
+	| awk '{print $1}')"
+ADDITIONS="$(git diff --text "${file_path}" \
+	| rg --text '^\+' \
+	| rg --text -v '^\+\+\+ b' \
+	| dd 2>&1 \
+	| tail -n1 \
+	| awk '{print $1}')"
+echo "REM: ${REMOVALS} ADD: ${ADDITIONS}"
 difference=$((ADDITIONS-REMOVALS))
 if [ "${difference}" -le 0 ]; then
 	difference_check=$((difference * -1))
