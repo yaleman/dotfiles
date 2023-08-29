@@ -52,7 +52,6 @@ ADDITIONS="$(git diff --text "${file_path}" \
 	| dd 2>&1 \
 	| tail -n1 \
 	| awk '{print $1}')"
-echo "REM: ${REMOVALS} ADD: ${ADDITIONS}"
 difference=$((ADDITIONS-REMOVALS))
 if [ "${difference}" -le 0 ]; then
 	difference_check=$((difference * -1))
