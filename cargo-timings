@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# cargo-timings
+
+# run timings things, you can specify extra stuff at the end
+
+# shellcheck disable=SC2068
+cargo clean && cargo build --timings $@ && open target/cargo-timings/cargo-timing.html
+
+echo "Opened the timings file!"
