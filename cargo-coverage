@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# does rust coverage things
+
+set -e
+
+if [ "$(which grcov)" == "" ]; then
+    echo "grcov not found. Please install grcov"
+    exit 1
+fi
+
+if [ "$(which cargo)" == "" ]; then
+    echo "cargo not found. Please install cargo"
+    exit 1
+fi
+
+if [ ! -f 'Cargo.toml' ]; then
+    echo "This script must be run from the root of a project"
+    exit 1
+fi
+
+if [ ! -d './target/' ]; then
+    echo "Are we in a rust project? No target directory found"
+fi
+
+LLVM_PROFILE_FILE="$(pwd)/target/profile/coverage-%p-%m.profraw" RUSTFLAGS="-C instrument-coverage" cargo test
+
+if [ -d "./target/coverage/html" ]; then
+    rm -rf ./target/coverage/html
+fi
+
+if [ ! -d "./target/debug/deps" ]; then
+    echo "No deps found. Are you sure you ran the tests?"
+    exit 1
+fi
+
+mkdir -p target/coverage/
+
+grcov . --binary-path ./target/debug/deps/ \
+        -s . \
+        -t html \
+        --branch \
+        --ignore-not-existing \
+        --ignore '../*' \
+        --ignore "/*" \
+        --ignore "target/*" \
+        -o target/coverage/html
+
+echo "Coverage report is in ./target/coverage/html/index.html"
