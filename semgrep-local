@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# shellcheck disable=SC2068
+semgrep ci --config auto \
+    --exclude-rule "yaml.github-actions.security.third-party-action-not-pinned-to-commit-sha.third-party-action-not-pinned-to-commit-sha" $@
