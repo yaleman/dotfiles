@@ -1,0 +1,6 @@
+ansible
+ansible-vault
+ruff
+mypy
+pytest
+
