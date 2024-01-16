@@ -23,7 +23,7 @@ MYDIR="$(dirname "$0")"
 docker run --rm -it \
 	--mount 'type=bind,src=./report,target=/root/scoutsuite-report' \
 	--mount "type=bind,src=${MYDIR}/scoutsuite-update.sh,target=/usr/local/bin/scoutsuite-update.sh" \
-	-p "8000:8000" \
+	-p "8072:8000" \
 	-e "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}" \
 	-e "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}" \
 	-e "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}" \
