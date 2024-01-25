@@ -12,7 +12,8 @@ set -e
 INPUT_FILENAME="$1"
 #shellcheck disable=SC2001
 EXTENSION="$(echo "$1" | awk -F'.' '{print $NF}' )"
-OUTPUT_FILENAME="$(echo "$1" | sed -E "s/(${EXTENSION})\$/mkv/" )"
+OUTPUT_FILENAME_NOTMP="$(echo "$1" | sed -E "s/(${EXTENSION})\$/mkv/" )"
+OUTPUT_FILENAME="${OUTPUT_FILENAME_NOTMP}.tmp"
 
 if [ -f "${OUTPUT_FILENAME}" ]; then
     echo "Skipping ${INPUT_FILENAME} - ${OUTPUT_FILENAME} already exists"
@@ -44,6 +45,7 @@ fi
 if [ "${INPUT_SIZE}" -gt "${OUTPUT_FILENAME_SIZE}" ]; then
     echo "Deleting ${INPUT_FILENAME} - input ${INPUT_SIZE} > ${OUTPUT_FILENAME_SIZE}"
     rm "${INPUT_FILENAME}"
+    mv "${OUTPUT_FILENAME}" "${OUTPUT_FILENAME_NOTMP}"
 else
     echo "New file is larger ${OUTPUT_FILENAME_SIZE} > ${INPUT_SIZE}} - deleting ${OUTPUT_FILENAME}"
     rm "${OUTPUT_FILENAME}"
