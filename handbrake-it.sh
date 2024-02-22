@@ -44,8 +44,8 @@ fi
 
 if [ "${INPUT_SIZE}" -gt "${OUTPUT_FILENAME_SIZE}" ]; then
     echo "Deleting ${INPUT_FILENAME} - input ${INPUT_SIZE} > ${OUTPUT_FILENAME_SIZE}"
-    rm "${INPUT_FILENAME}"
     mv "${OUTPUT_FILENAME}" "${OUTPUT_FILENAME_NOTMP}"
+    rm "${INPUT_FILENAME}"
 else
     echo "New file is larger ${OUTPUT_FILENAME_SIZE} > ${INPUT_SIZE}} - deleting ${OUTPUT_FILENAME}"
     rm "${OUTPUT_FILENAME}"
