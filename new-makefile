@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# new-makefile - create a new template Makefile with a help command
+
+if [ -f "Makefile" ]; then
+	echo "One already exists!"
+	exit 1
+fi
+
+cat > Makefile <<EOF
+.DEFAULT: help
+.PHONY: help
+help:
+	@grep -E -h '\s##\s' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+EOF
+echo "Done!"
