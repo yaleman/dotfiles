@@ -1,1 +1,26 @@
-/Users/yaleman/Projects/wiki/updategit.sh
+#!/bin/zsh
+
+#shellcheck disable=SC1090
+source ~/.zshrc
+
+if [ -z "${WIKIDIR}" ]; then
+	echo "Please set the WIKIDIR env var!"
+	exit 1
+fi
+
+if [ -d "${WIKIDIR}" ]; then
+	git -C "${WIKIDIR}" fetch --all
+	if [ -f "${WIKIDIR}/cleanup_changelogs.py" ]; then
+		python "${WIKIDIR}/cleanup_changelogs.py" || exit 1
+	else
+		echo "*** COULDN'T FIND THE CLEANUP SCRIPT AT ${WIKIDIR}/cleanup_changelogs.py"
+	fi
+	git -C "${WIKIDIR}" add './'
+	git -C "${WIKIDIR}" status
+	git -C "${WIKIDIR}" commit -am 'updating wiki'
+	git -C "${WIKIDIR}" rebase origin/main
+	git -C "${WIKIDIR}" push
+else
+	echo "Uh, the wiki dir is missing? '${WIKIDIR}'"
+	exit 1
+fi
