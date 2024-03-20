@@ -12,7 +12,7 @@ click = "^8.1.7"
 [tool.poetry.group.def.dependencies]
 ruff = "^0.0.286"
 mypy = "^1.5.1"
-black = "^23.7.0"
+black = "^24.3.0"
 pytest = "^7.4.0"
 
 [tool.poetry.scripts]
