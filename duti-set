@@ -9,7 +9,7 @@ if [ -z "$(which duti)" ]; then
     exit 1
 fi
 
-if [ ! -f "${DIRNAME}/duti/duti-defaults" ]; then
+if [ ! -d "${DIRNAME}/duti/" ]; then
     echo "Can't find duti-defaults, bailing!"
     exit 1
 fi
