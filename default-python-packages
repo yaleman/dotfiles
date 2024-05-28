@@ -1,6 +1,13 @@
+# for updatewiki
+GitPython
+# ansible
 ansible
 ansible-vault
+# tools
+codespell
 ruff
 mypy
 pytest
+yamllint
+poetry
 
