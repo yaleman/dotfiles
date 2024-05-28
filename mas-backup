@@ -1,0 +1,21 @@
+#!/bin/bash
+
+
+if [ "$(which mas | wc -l)" -ne 1 ]; then
+    echo "mas command not found, installing from brew"
+    brew install mas
+fi
+
+if [ "$(mas list 2>&1 | grep -c 'No installed apps found' )" -ne 0 ]; then
+    echo "mas list command failed, not backing up"
+    exit 1
+fi
+
+DIRNAME="$(dirname "$0")"
+FILENAME="${DIRNAME}/mas-list.txt"
+
+echo "Backing up mac app store list"
+mas list > "${FILENAME}"
+
+echo "Done..."
+cat "${FILENAME}"
