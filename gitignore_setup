@@ -48,15 +48,15 @@ EXPECTED_LINES = [
 
 # if the key regex matches filenames in the directory, add these
 FILE_MATCHERS = {
-    "\.tf$": ["terraform.tfstate*"],
-    "^(\.venv|pyproject\.toml)$": [
+    r"\.tf$": ["terraform.tfstate*"],
+    r"^(\.venv|pyproject\.toml)$": [
         "build/",
         "dist/",
         "*.egg-info/",
         "**/__pycache__/*",
         ".venv",
     ],
-    "^Cargo\.toml": [
+    r"^Cargo\.toml": [
         "target/",
     ],
 }
