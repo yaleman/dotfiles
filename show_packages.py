@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 from dataclasses import dataclass
-from enum import StrEnum
+
 import json
 import logging
 from optparse import OptionParser, Values
@@ -13,15 +13,20 @@ import sys
 from typing import Dict, Optional
 
 
-class PackageState(StrEnum):
+class PackageState:
     """package state"""
 
-    INSTALLED = "installed"
-    USERINSTALLED = "user-installed"
     DEPENDENCY = "dependency"
+    ERRROR = "error"
+    INSTALLATION_WARNING = "installation-warning"
+    INSTALLED = "installed"
     UNKNOWN = "unknown"
+    USERINSTALLED = "user-installed"
+    REMOVED = "removed"
+    PURGED = "purged"
 
-    def from_zypper(value: str) -> "PackageState":
+    @classmethod
+    def from_zypper(cls, value: str) -> str:
         """In the Status column the search command distinguishes between
         user installed packages (i+) and
         automatically installed packages (i)."""
@@ -29,6 +34,51 @@ class PackageState(StrEnum):
             return PackageState.DEPENDENCY
         if value == "i+":
             return PackageState.USERINSTALLED
+        return PackageState.UNKNOWN
+
+    @classmethod
+    def from_dpkg(cls, value: str) -> str:
+        """from the dpkg output"""
+
+        # Desired=Unknown/Install/Remove/Purge/Hold
+        # | Status=Not/Inst/Conf-files/Unpacked/halF-conf/Half-inst/trig-aWait/Trig-pend
+        # |/ Err?=(none)/Reinst-required (Status,Err: uppercase=bad)
+        # man dpkg-query gives more detail
+        #
+        # First letter → desired package state ("selection state"):
+        # u ... unknown
+        # i ... install
+        # r ... remove/deinstall
+        # p ... purge (remove including config files)
+        # h ... hold
+        #
+        # Second letter → current package state:
+        # n ... not-installed
+        # i ... installed
+        # c ... config-files (only the config files are installed)
+        # U ... unpacked
+        # F ... half-configured (configuration failed for some reason)
+        # h ... half-installed (installation failed for some reason)
+        # W ... triggers-awaited (package is waiting for a trigger from another package)
+        # t ... triggers-pending (package has been triggered)
+        #
+        # Third letter → error state (you normally shouldn't see a third letter, but a space, instead):
+        # R ... reinst-required (package broken, reinstallation required)
+
+        if len(value) == 3:
+            return PackageState.ERRROR
+
+        desired = value[0]
+        if desired == "r":
+            return PackageState.REMOVED
+        if desired == "p":
+            return PackageState.PURGED
+
+        status = value[1]
+        if desired == "i":
+            if status in ["i", "c"]:
+                return PackageState.INSTALLED
+            return PackageState.INSTALLATION_WARNING
         return PackageState.UNKNOWN
 
 
@@ -42,9 +92,9 @@ class Package:
     update_repo: Optional[str] = None
 
     arch: Optional[str] = None
-    state: Optional[str] = None
+    state: str = "unknown"
 
-    def dict_without_nulls(self) -> dict[str, str]:
+    def dict_without_nulls(self) -> Dict[str, str]:
         """return a dict without null values"""
         return {
             key: value
@@ -93,7 +143,7 @@ def try_zypper(options: Values) -> bool:
                 if options.include_descriptions
                 else None
             ),
-            state=PackageState.from_zypper(parsed.group("state")).value,
+            state=PackageState.from_zypper(parsed.group("state")),
         )
         results[package.name] = package
 
@@ -147,6 +197,91 @@ def try_zypper(options: Values) -> bool:
     return True
 
 
+def try_dpkg(options: Values) -> bool:
+    """dpkg this time"""
+    if which("dpkg") is None:
+        return False
+
+    logging.debug("dpkg is available")
+    cmd = ["dpkg", "-l"]
+    try:
+        first_output = subprocess.run(
+            cmd, capture_output=True, check=True, encoding="utf-8"
+        )
+    except subprocess.CalledProcessError as error:
+        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        return False
+    except Exception as error:
+        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        return False
+    # this parses the default line response
+    dpkg_parser = re.compile(
+        r"^(?P<state>\S+)\s+(?P<name>\S+)\s+(?P<version>\S+)\s+(?P<arch>\S+)\s+(?P<description>.*)"
+    )
+    results: Dict[str, Package] = {}
+
+    for line in first_output.stdout.splitlines():
+        parsed = dpkg_parser.search(line.strip())
+        if parsed is None:
+            logging.debug(f"Skipping line: {line}")
+            continue
+
+        if parsed.group("name") == "Name" and parsed.group("version") == "Version":
+            continue
+
+        package = Package(
+            name=parsed.group("name"),
+            arch=parsed.group("arch"),
+            version=parsed.group("version"),
+            description=(
+                parsed.group("description").strip()
+                if options.include_descriptions
+                else None
+            ),
+            state=PackageState.from_dpkg(parsed.group("state")),
+        )
+        if package.state == PackageState.UNKNOWN:
+            logging.warn(
+                'Unknown state for package: %s line="%s"',
+                json.dumps(package.__dict__),
+                line,
+            )
+        results[package.name] = package
+    cmd = ["apt", "list", "--upgradable"]
+    failed = False
+    try:
+        update_output = subprocess.run(
+            cmd, capture_output=True, check=True, encoding="utf-8"
+        )
+    except subprocess.CalledProcessError as error:
+        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        failed = True
+    except Exception as error:
+        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        failed = True
+    if not failed:
+        # util-linux-locales/oldoldstable 2.33.1-0.1+deb10u1 all [upgradable from: 2.33.1-0.1]
+        update_parser = re.compile(
+            r"^(?P<name>[^\/]+)\/\S+\s+(?P<update_version>[^ ]+) (?P<arch>\S+)\s+ \[upgradable from: (?P<version>[^ ]+)"
+        )  # noqa: E501
+        for line in update_output.stdout.splitlines():
+            parsed = update_parser.search(line.strip())
+            if parsed is not None:
+                if parsed.group("name") in results:
+                    package = results[parsed.group("name")]
+                else:
+                    package = Package(**parsed.groupdict())
+                results[package.name] = package
+    for package in results.values():
+        if package.state in [PackageState.REMOVED, PackageState.PURGED]:
+            if options.include_removed:
+                print(json.dumps(package.dict_without_nulls()))
+        else:
+            print(json.dumps(package.dict_without_nulls()))
+
+    return True
+
+
 def setup_logging(options: Values) -> None:
     """does what it says on the tin"""
     if options.debug:
@@ -176,6 +311,14 @@ def main() -> None:
         default=False,
         help="Include descriptions",
     )
+    parser.add_option(
+        "-r",
+        "--include-removed",
+        action="store_true",
+        dest="include_removed",
+        default=False,
+        help="Include removed and purged packages",
+    )
 
     (options, _) = parser.parse_args()
 
@@ -183,7 +326,8 @@ def main() -> None:
 
     if try_zypper(options):
         return
-
+    if try_dpkg(options):
+        return
 
 if __name__ == "__main__":
     main()
