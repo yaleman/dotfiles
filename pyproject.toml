@@ -24,3 +24,6 @@ git-file-ref = "dotfiles.git_file_ref:main"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
