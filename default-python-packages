@@ -10,4 +10,4 @@ mypy
 pytest
 yamllint
 poetry
-
+loguru

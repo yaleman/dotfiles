@@ -41,17 +41,17 @@ EXPECTED_LINES = [
     ".DS_Store",
     "config.py",
     "dist/",
-    ".env",
-    ".envrc",  # direnv config
+    ".env" ".envrc",  # direnv config
     "*.asc",  # gpg files
 ]
 
 # if the key regex matches filenames in the directory, add these
 FILE_MATCHERS = {
     r"\.tf$": ["terraform.tfstate*"],
-    r"^(\.venv|pyproject\.toml)$": [
+    r"^(\.venv|pyproject\.toml|.py)$": [
         "build/",
         "dist/",
+        "*.pyc",
         "*.egg-info/",
         "**/__pycache__/*",
         ".venv",

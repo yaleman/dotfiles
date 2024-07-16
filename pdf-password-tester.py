@@ -7,7 +7,7 @@ import click
 from PyPDF2 import PdfReader
 
 
-def validate_pdf_password(reader, password) -> bool:
+def validate_pdf_password(reader: PdfReader, password: str) -> bool:
     try:
         if reader.decrypt(password) == 0:
             return False

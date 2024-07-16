@@ -18,13 +18,14 @@ def diff_string_suffix(string1: str, string2: str) -> Optional[Tuple[str, str]]:
     if string2.startswith(string2):
         """the second string starts with the first string"""
         return "", string2[len(string1) :]
+    return None
 
 
 @click.command()
 @click.argument("string1")
 @click.argument("string2")
 @click.option("-m", "--matching", is_flag=True, help="Show the matching bits")
-def main(string1: str = "", string2: str = "", matching: bool = False):
+def main(string1: str = "", string2: str = "", matching: bool = False) -> None:
     """main function"""
 
     result = diff_string_suffix(string1, string2)

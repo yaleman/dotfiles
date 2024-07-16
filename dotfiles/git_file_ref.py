@@ -22,7 +22,7 @@ def get_git_basedir() -> Optional[str]:
 
 @click.command()
 @click.argument("filepath", type=click.Path(exists=True))
-def main(filepath: click.Path) -> int:
+def main(filepath: str) -> int:
     pwd = Path(os.getcwd())
     if filepath.startswith("./"):
         filepath = filepath.lstrip("./")
@@ -42,6 +42,7 @@ def main(filepath: click.Path) -> int:
         result = f"{filepath}".replace(git_basedir, "").lstrip("/")
         # print(f"git-file-ref {result=}", file=sys.stderr)
         print(result)
+    return 0
 
 
 if __name__ == "__main__":
