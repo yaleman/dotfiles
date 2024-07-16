@@ -41,7 +41,8 @@ EXPECTED_LINES = [
     ".DS_Store",
     "config.py",
     "dist/",
-    ".env" ".envrc",  # direnv config
+    ".env",
+    ".envrc",  # direnv config
     "*.asc",  # gpg files
 ]
 
@@ -89,4 +90,5 @@ logger.info("Adding the following lines:")
 with open(GITIGNORE, "a", encoding="utf8") as gitignore_fh:
     for line in needtoadd:
         logger.info(line)
-    gitignore_fh.writelines([f"{line}\n" for line in needtoadd])
+    lines = "\n".join(needtoadd)
+    gitignore_fh.write(f"\n{lines}\n")
