@@ -1,0 +1,23 @@
+#!/bin/bash
+
+BACKUPDIR="${HOME}/Nextcloud/Backups/ex3300/$(date +%Y-%m-%d-%H%M%S)"
+
+mkdir "${BACKUPDIR}"
+
+cd "${BACKUPDIR}" || exit 1
+
+echo "Backing up to ${BACKUPDIR}"
+
+echo "requesting rescue configuration"
+ssh ex3300.housenet.yaleman.org request system configuration rescue save
+echo "testing rescue configuration"
+ssh ex3300.housenet.yaleman.org test configuration /config/rescue.conf.gz
+echo "copying files..."
+scp -r ex3300.housenet.yaleman.org:/config/rescue.conf.gz .
+scp -r ex3300.housenet.yaleman.org:/config/juniper.conf.gz .
+
+
+echo "Showing files"
+find "${BACKUPDIR}" -type f -ls
+
+echo "Done!"
