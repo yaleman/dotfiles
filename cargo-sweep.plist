@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>com.cargo.cargo-sweep</string>
+        <key>ProgramArguments</key>
+        <array>
+          <string>$HOME/.cargo/bin/cargo-sweep</string>
+          <string>sweep</string>
+          <string>--installed</string>
+          <string>-r</string>
+          <string>$SWEEP_DIR</string>
+        </array>
+        <key>EnvironmentVariables</key>
+        <dict>
+            <key>PATH</key>
+            <string>$HOME/.cargo/bin</string>
+        </dict>
+        <key>StandardErrorPath</key>
+        <string>/tmp/cargo-sweep.err</string>
+        <key>StandardOutPath</key>
+        <string>/tmp/cargo-sweep.out</string>
+        <key>StartInterval</key>
+        <integer>43200</integer>
+    </dict>
+</plist>

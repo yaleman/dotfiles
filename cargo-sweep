@@ -1,4 +1,0 @@
-#!/bin/bash
-
-cargo sweep -r --installed ~/Projects | rg -v 'Successfully removed'
-cargo sweep -r --time 1 ~/Projects | rg -v 'Successfully removed'
