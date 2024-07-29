@@ -57,7 +57,7 @@ if [ "$(ps aux | /opt/homebrew/bin/rg 'Microsoft Edge\.app' | wc -l)" -gt 1 ]; t
         echo "I am ${HOSTNAME}"
     fi
 
-    curl ${CURL_SILENT} -f "https://${HEC_HOST}:${HEC_PORT}/services/collector/raw?host=${HOSTNAME}" \
+    curl ${CURL_SILENT} -f "https://${HEC_HOST}:${HEC_PORT}/services/collector/raw?host=${HOSTNAME}&sourcetype=tabcounter" \
         -H "${AUTH_HEADER}" \
         -d "${DATA}" > "${LOG_DEST}"
 else

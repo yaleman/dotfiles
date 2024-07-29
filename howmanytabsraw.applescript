@@ -16,7 +16,7 @@ on run argv
 	do shell script "uuidgen"
 	set channel to (get result)
 
-	set baseURL to "https://" & hecHost & ":" & hecPort & "/services/collector/raw?channel=" & channel & "&host=" & hostName
+	set baseURL to "https://" & hecHost & ":" & hecPort & "/services/collector/raw?channel=" & channel & "&host=" & hostName & "&sourcetype=tabcounter"
 
 	tell application "Safari"
 		-- Script running variables
@@ -60,7 +60,6 @@ on run argv
 		--\"host\":\"" & hostName & "\",
 		set dataValue to "{\"browser\" : \"safari\", \"tabs\":" & tabCountTotal & ", \"windows\":" & windowCount & "}"
 		set authHeader to "Authorization: Splunk " & hecToken
-
 		set outputValue to do shell script "/usr/bin/curl -s -v -H " & quoted form of authHeader & " --data " & quoted form of dataValue & " " & quoted form of baseURL
 		outputValue
 
