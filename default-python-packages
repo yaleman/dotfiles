@@ -11,3 +11,5 @@ pytest
 yamllint
 poetry
 loguru
+certbot
+certbot-dns-cloudflare
