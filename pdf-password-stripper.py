@@ -4,7 +4,7 @@
 from pathlib import Path
 import sys
 
-from PyPDF2 import PdfReader, PasswordType, PdfWriter
+from PyPDF2 import PdfReader, PasswordType, PdfWriter  # type: ignore
 import click
 
 
@@ -27,9 +27,7 @@ def main(filename: str, password: str) -> None:
     outpath = Path(filename)
     outpath_name_without_extension = ".".join(outpath.name.split(".")[:-1])
     outpath_extension = outpath.name.split(".")[-1]
-    output_path = outpath.with_name(
-        f"{outpath_name_without_extension}-decrypted.{outpath_extension}"
-    )
+    output_path = outpath.with_name(f"{outpath_name_without_extension}-decrypted.{outpath_extension}")
     with open(
         output_path.resolve(),
         "wb",

@@ -4,7 +4,7 @@
 import sys
 
 import click
-from PyPDF2 import PdfReader
+from PyPDF2 import PdfReader  # type: ignore
 
 
 def validate_pdf_password(reader: PdfReader, password: str) -> bool:

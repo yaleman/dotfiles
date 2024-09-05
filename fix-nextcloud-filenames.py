@@ -9,7 +9,7 @@ BAD_CHARS = ["{", "}", "!", "@", "#", "$", "%", "^", "&", "*", "=", "|", "\\", "
 
 @click.command()
 @click.argument("filepath", type=click.Path(exists=True))
-def fix_nextcloud_filenames(filepath: str):
+def fix_nextcloud_filenames(filepath: str) -> None:
     path = Path(filepath)
 
     if not path.exists():
