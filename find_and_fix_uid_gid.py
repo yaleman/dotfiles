@@ -10,11 +10,11 @@ import click
 
 import os
 
-IGNORE_ROOTS = [
+IGNORE_ROOTS = (
     "/proc",
     "/sys",
     "/dev",
-]
+)
 
 
 @click.command()
@@ -35,7 +35,7 @@ def find_files_by_uid_gid(
         sys.exit(1)
 
     for root, _dirs, files in os.walk(start_path):
-        if root in IGNORE_ROOTS:
+        if root in IGNORE_ROOTS or root.startswith(tuple(IGNORE_ROOTS)):
             print(f"Skipping {root=}")
             continue
         for file in files:
