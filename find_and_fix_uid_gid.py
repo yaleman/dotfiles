@@ -23,12 +23,14 @@ IGNORE_ROOTS = (
 @click.option("-g", "--gid", type=int, help="The GID to search for")
 @click.option("--new-uid", type=int, help="The new UID to set")
 @click.option("--new-gid", type=int, help="The new GID to set")
+@click.option("--debug", is_flag=True, help="Enable debug output")
 def find_files_by_uid_gid(
     start_path: str,
     uid: Optional[int] = None,
     gid: Optional[int] = None,
     new_uid: Optional[int] = None,
     new_gid: Optional[int] = None,
+    debug: bool = False,
 ) -> None:
     if uid is None and gid is None:
         print("No UID or GID provided, exiting")
@@ -36,13 +38,15 @@ def find_files_by_uid_gid(
 
     for root, _dirs, files in os.walk(start_path):
         if root in IGNORE_ROOTS or root.startswith(tuple(IGNORE_ROOTS)):
-            print(f"Skipping {root=}")
+            if debug:
+                print(f"Skipping {root=}")
             continue
         for file in files:
             file_path = os.path.join(root, file)
             file_path_path = Path(file_path)
             if not file_path_path.is_file() and not file_path_path.is_dir():
-                print(f"Skipping as not file/dir: {file_path}", file=sys.stderr)
+                if debug:
+                    print(f"Skipping as not file/dir: {file_path}", file=sys.stderr)
                 continue
 
             try:
@@ -61,7 +65,8 @@ def find_files_by_uid_gid(
             except PermissionError as error:
                 print(f"Permission denied: {file_path=} {error=}")
             except FileNotFoundError:
-                print(f"File not found: {file_path=}")
+                if debug:
+                    print(f"File not found: {file_path=}")
             except Exception as error:
                 print(f"Error processing {file_path=}: {error=}")
 
