@@ -39,7 +39,7 @@ def find_files_by_uid_gid(
     for root, _dirs, files in os.walk(start_path):
         if root in IGNORE_ROOTS or root.startswith(tuple(IGNORE_ROOTS)):
             if debug:
-                print(f"Skipping {root=}")
+                print(f"Skipping root={root}")
             continue
         for file in files:
             file_path = os.path.join(root, file)
@@ -63,12 +63,12 @@ def find_files_by_uid_gid(
                         new_file_gid = file_stat.st_gid
                     os.chown(file_path, new_file_uid, new_file_gid)
             except PermissionError as error:
-                print(f"Permission denied: {file_path=} {error=}")
+                print(f"Permission denied: file_path={file_path} error={error}")
             except FileNotFoundError:
                 if debug:
-                    print(f"File not found: {file_path=}")
+                    print(f"File not found: file_path={file_path}")
             except Exception as error:
-                print(f"Error processing {file_path=}: {error=}")
+                print(f"Error processing file_path={file_path}: error={error}")
 
 
 if __name__ == "__main__":
