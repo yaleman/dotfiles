@@ -51,7 +51,7 @@ def find_files_by_uid_gid(
 
             try:
                 file_stat = os.stat(file_path)
-                if file_stat.st_uid == uid or file_stat.st_gid == gid:
+                if (uid is not None and file_stat.st_uid == uid) or (gid is not None and file_stat.st_gid == gid):
                     print(f"Found matching file='{file_path}' UID={file_stat.st_uid}, GID={file_stat.st_gid}")
                     if new_uid is not None and file_stat.st_uid != new_uid:
                         new_file_uid = new_uid
