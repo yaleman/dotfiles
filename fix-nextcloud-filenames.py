@@ -1,20 +1,30 @@
 #!python3
-
+import os
 from pathlib import Path
 import sys
+from typing import Optional
+
 import click
 
 BAD_CHARS = [" — ", "{", "}", "!", "@", "#", "$", "%", "^", "&", "*", "=", "|", "\\", "/", "?", "<", ">", ":", ";", "`"]
 
 
 @click.command()
-@click.argument("filepath", type=click.Path(exists=True))
-def fix_nextcloud_filenames(filepath: str) -> None:
+@click.option("--filepath", type=click.Path(exists=True))
+def fix_nextcloud_filenames(filepath: Optional[str]=None) -> None:
+
+    if filepath is None:
+        filepath = os.getenv("FIX_NEXTCLOUD_DEFAULT_PATH")
+    if filepath is None:
+        print("Please provide a file path or set the env var FIX_NEXTCLOUD_DEFAULT_PATH.")
+        sys.exit(1)
     path = Path(filepath)
 
     if not path.exists():
         print(f"File {path} does not exist.")
         sys.exit(1)
+
+    print(f"Checking {filepath}", file=sys.stderr)
 
     for filename in path.iterdir():
         if filename.is_file():
