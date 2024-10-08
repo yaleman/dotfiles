@@ -1,6 +1,5 @@
 #!python3
 from functools import lru_cache
-import os
 from pathlib import Path
 import sys
 from typing import Optional, Set
