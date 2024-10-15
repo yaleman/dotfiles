@@ -62,6 +62,9 @@ def find_files_by_uid_gid(
                     else:
                         new_file_gid = file_stat.st_gid
                     os.chown(file_path, new_file_uid, new_file_gid)
+                else:
+                    if debug:
+                        print(f"Skipping file='{file_path}' UID={file_stat.st_uid}, GID={file_stat.st_gid}")
             except PermissionError as error:
                 print(f"Permission denied: file_path={file_path} error={error}")
             except FileNotFoundError:
