@@ -6,9 +6,9 @@
 from pathlib import Path
 import sys
 from typing import Optional, Set
-import click
 
 import os
+import argparse
 
 IGNORE_ROOTS = (
     "/proc",
@@ -48,13 +48,6 @@ def do_thing(
         print(f"Error processing file_path={file_path}: error={error}")
 
 
-@click.command()
-@click.argument("start_path")
-@click.option("-u", "--uid", type=int, help="The UID to search for")
-@click.option("-g", "--gid", type=int, help="The GID to search for")
-@click.option("--new-uid", type=int, help="The new UID to set")
-@click.option("--new-gid", type=int, help="The new GID to set")
-@click.option("--debug", is_flag=True, help="Enable debug output")
 def find_files_by_uid_gid(
     start_path: str,
     uid: Optional[int] = None,
@@ -90,4 +83,21 @@ def find_files_by_uid_gid(
 
 
 if __name__ == "__main__":
-    find_files_by_uid_gid()
+    parser = argparse.ArgumentParser(description="Find and fix UID/GID in files.")
+    parser.add_argument("start_path", help="The starting path to search")
+    parser.add_argument("-u", "--uid", type=int, help="The UID to search for")
+    parser.add_argument("-g", "--gid", type=int, help="The GID to search for")
+    parser.add_argument("--new-uid", type=int, help="The new UID to set")
+    parser.add_argument("--new-gid", type=int, help="The new GID to set")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
+
+    args = parser.parse_args()
+
+    find_files_by_uid_gid(
+        start_path=args.start_path,
+        uid=args.uid,
+        gid=args.gid,
+        new_uid=args.new_uid,
+        new_gid=args.new_gid,
+        debug=args.debug,
+    )
