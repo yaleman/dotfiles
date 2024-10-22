@@ -1,0 +1,23 @@
+#!/bin/bash
+
+if [ -z "${1}" ]; then
+    HOSTNAME="c3650.housenet.yaleman.org"
+else
+    HOSTNAME="${1}"
+fi
+
+BACKUPDIR="${HOME}/Nextcloud/Backups/${HOSTNAME}"
+BACKUPFILE="${BACKUPDIR}/$(date +%Y-%m-%d-%H%M%S).conf.gz"
+mkdir -p "${BACKUPDIR}"
+
+cd "${BACKUPDIR}" || exit 1
+
+echo "Backing up to ${BACKUPFILE}"
+
+echo "Backing up config..."
+ssh "${HOSTNAME}" show running-config | gzip > "${BACKUPFILE}"
+
+echo "Showing files"
+find "${BACKUPDIR}" -type f -ls
+
+echo "Done!"
