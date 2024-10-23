@@ -1,30 +1,23 @@
-[tool.poetry]
+[project]
 name = "dotfiles"
 version = "0.1.0"
 description = ""
-authors = ["James Hodgkinson <james@terminaloutcomes.com>"]
+authors = [{ name = "James Hodgkinson", email = "james@terminaloutcomes.com" }]
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.10"
-click = "^8.1.7"
-pypdf2 = "^3.0.1"
-pycryptodome = "^3.20.0"
-loguru = "^0.7.2"
-
-[tool.poetry.group.def.dependencies]
-ruff = "^0.7.0"
-mypy = "^1.11.1"
-black = "^24.3.0"
-pytest = "^8.3.3"
-
-[tool.poetry.scripts]
-diffstr = 'dotfiles.diffstr:main'
-git-file-ref = "dotfiles.git_file_ref:main"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1.7",
+    "loguru>=0.7.2",
+    "pycryptodome>=3.21.0",
+    "pypdf2>=3.0.1",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 120
+
+[tool.uv]
+dev-dependencies = ["mypy>=1.13.0", "pytest==8.3.3", "ruff>=0.7.0"]
