@@ -1,1 +1,1 @@
-""" Functionality for the dotfiles module """
+"""Functionality for the dotfiles module"""

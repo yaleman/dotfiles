@@ -1,4 +1,5 @@
-""" diffing strings! """
+"""diffing strings!"""
+
 import sys
 import click
 

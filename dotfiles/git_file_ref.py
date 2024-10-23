@@ -1,4 +1,4 @@
-""" find the 'git' file path for a given path """
+"""find the 'git' file path for a given path"""
 
 import os
 from pathlib import Path
