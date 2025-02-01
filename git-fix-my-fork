@@ -25,12 +25,12 @@ if [ -z "${DEFAULT_BRANCH}" ]; then
     exit 1
 fi
 
-git fetch upstream || exit 1
+git fetch" ${REMOTE}" || exit 1
 
 echo "Switching to ${DEFAULT_BRANCH}"
 git switch "${DEFAULT_BRANCH}" || exit 1
 
 echo "Resetting to ${DEFAULT_BRANCH}"
-git reset --hard "upstream/${DEFAULT_BRANCH}"
+git reset --hard "${REMOTE}/${DEFAULT_BRANCH}"
 
 git gc
