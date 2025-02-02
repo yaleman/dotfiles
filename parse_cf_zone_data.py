@@ -7,6 +7,7 @@
 # ///
 
 import json
+from pathlib import Path
 import click
 
 
@@ -14,7 +15,7 @@ import click
 @click.argument("zone")
 @click.argument("filename", type=click.File("r"))
 def main(zone: str, filename: click.File) -> None:
-    data = json.load(filename).get("result")
+    data = json.load(Path(filename.name).open(encoding="utf-8")).get("result")
     for record in data:
         if record["name"] == zone:
             record["name"] = "@"
