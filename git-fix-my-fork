@@ -13,7 +13,7 @@ if [ "$(git remote -v | grep -ce "^upstream")" -eq 0 ]; then
     echo "Couldn't find an upstream remote, bailing"
     exit 1
 else
-    REMOTE="$(git remote)"
+    REMOTE="$(git remote | head -n1)"
 fi
 
 DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef | jq -r .defaultBranchRef.name)"
