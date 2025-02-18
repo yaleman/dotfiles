@@ -24,7 +24,7 @@ $(git status -s)
 EOF
 )"
 	git -C "${WIKIDIR}" rebase origin/main
-	# git -C "${WIKIDIR}" push
+	git -C "${WIKIDIR}" push
 else
 	echo "Uh, the wiki dir is missing? '${WIKIDIR}'"
 	exit 1
