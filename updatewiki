@@ -17,9 +17,14 @@ if [ -d "${WIKIDIR}" ]; then
 	fi
 	git -C "${WIKIDIR}" add './'
 	git -C "${WIKIDIR}" status
-	git -C "${WIKIDIR}" commit -am 'updating wiki'
+	git -C "${WIKIDIR}" commit -a -m "$(cat <<EOF
+updating wiki
+
+$(git status -s)
+EOF
+)"
 	git -C "${WIKIDIR}" rebase origin/main
-	git -C "${WIKIDIR}" push
+	# git -C "${WIKIDIR}" push
 else
 	echo "Uh, the wiki dir is missing? '${WIKIDIR}'"
 	exit 1
