@@ -5,18 +5,17 @@ import os.path
 import os
 from pathlib import Path
 import sys
-from typing import TypedDict
+from pydantic.dataclasses import dataclass
 
-class ConfigFile(TypedDict):
+
+@dataclass
+class ConfigFile:
     one_to_one: list[str]
     public_maps: dict[str, str]
     private_maps: dict[str, str]
 
-
-
     @classmethod
     def load_file(cls, filepath: Path) -> "ConfigFile":
-
         valid_keys = ("one_to_one", "public_maps", "private_maps")
         data = json.loads(open(filepath, "r", encoding="utf-8").read())
         failed_validation = False
@@ -31,6 +30,7 @@ class ConfigFile(TypedDict):
             if key not in data:
                 print(f"Missing key in config: {key}")
         return ConfigFile(**data)
+
 
 # argparse setup
 parser = argparse.ArgumentParser(description="Setup dotfiles")
@@ -89,7 +89,7 @@ for filename in config_file.one_to_one:
             print(f"{target} exists, but is not a link!")
 
 # public_maps map <public_path>/key -> value
-for key, value in config_file.public_maps:
+for key, value in config_file.public_maps.items():
     source = os.path.join(public_path, key)
     target = os.path.expanduser(value)
     if not os.path.exists(target):
@@ -103,7 +103,7 @@ for key, value in config_file.public_maps:
             print(f"{target} exists, but is not a link!")
 
 # private_maps map <private_path>/key -> value
-for source, target in config_file.get("private_maps").items():
+for source, target in config_file.private_maps.items():
     source = os.path.join(private_path, source)
 
     if not os.path.exists(source):

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This loops the screen cammand for pesky serial devices which keep disappearing
+# This loops the screen command for pesky serial devices which keep disappearing
 
 if [ -z "$1" ]; then
     echo "Specify a target device"

@@ -4,7 +4,7 @@
 from pathlib import Path
 import sys
 
-from PyPDF2 import PdfReader, PasswordType, PdfWriter  # type: ignore
+from PyPDF2 import PdfReader, PasswordType, PdfWriter
 import click
 
 

@@ -9,7 +9,9 @@ dependencies = [
     "click>=8.1.7",
     "loguru>=0.7.2",
     "pycryptodome>=3.21.0",
+    "pydantic>=2.11.5",
     "pypdf2>=3.0.1",
+    "requests>=2.32.3",
 ]
 
 [build-system]
@@ -21,3 +23,8 @@ line-length = 120
 
 [tool.uv]
 dev-dependencies = ["mypy>=1.13.0", "pytest==8.3.3", "ruff>=0.7.0"]
+
+[dependency-groups]
+dev = [
+    "types-requests>=2.32.0.20250515",
+]

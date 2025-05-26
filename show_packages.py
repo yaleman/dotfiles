@@ -17,7 +17,7 @@ class PackageState:
     """package state"""
 
     DEPENDENCY = "dependency"
-    ERRROR = "error"
+    ERROR = "error"
     INSTALLATION_WARNING = "installation-warning"
     INSTALLED = "installed"
     UNKNOWN = "unknown"
@@ -66,7 +66,7 @@ class PackageState:
         # R ... reinst-required (package broken, reinstallation required)
 
         if len(value) == 3:
-            return PackageState.ERRROR
+            return PackageState.ERROR
 
         desired = value[0]
         if desired == "r":
@@ -96,11 +96,7 @@ class Package:
 
     def dict_without_nulls(self) -> Dict[str, str]:
         """return a dict without null values"""
-        return {
-            key: value
-            for key, value in self.__dict__.items()
-            if value is not None and value != ""
-        }
+        return {key: value for key, value in self.__dict__.items() if value is not None and value != ""}
 
 
 def try_zypper(options: Values) -> bool:
@@ -115,9 +111,7 @@ def try_zypper(options: Values) -> bool:
 
     cmd = [zypper, "search", "-i"]
     try:
-        output = output = subprocess.run(
-            cmd, capture_output=True, check=True, encoding="utf-8"
-        )
+        output = output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
         logging.error("Failed to run %s: %s", " ".join(cmd), error)
         return False
@@ -125,9 +119,7 @@ def try_zypper(options: Values) -> bool:
         logging.error("Failed to run %s: %s", " ".join(cmd), error)
         return False
     # this parses the default line response
-    zypper_parser = re.compile(
-        r"^(?P<state>\S+)\s+\|\s+(?P<name>\S+)\s+\|\s+(?P<description>[^\|]+)"
-    )
+    zypper_parser = re.compile(r"^(?P<state>\S+)\s+\|\s+(?P<name>\S+)\s+\|\s+(?P<description>[^\|]+)")
     results: Dict[str, Package] = {}
 
     for line in output.stdout.splitlines():
@@ -138,11 +130,7 @@ def try_zypper(options: Values) -> bool:
 
         package = Package(
             name=parsed.group("name"),
-            description=(
-                parsed.group("description").strip()
-                if options.include_descriptions
-                else None
-            ),
+            description=(parsed.group("description").strip() if options.include_descriptions else None),
             state=PackageState.from_zypper(parsed.group("state")),
         )
         results[package.name] = package
@@ -151,9 +139,7 @@ def try_zypper(options: Values) -> bool:
     cmd = ["zypper", "list-updates"]
     update_check_failed = False
     try:
-        output = output = subprocess.run(
-            cmd, capture_output=True, check=True, encoding="utf-8"
-        )
+        output = output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
         logging.error("Failed to run %s: %s", " ".join(cmd), error)
         update_check_failed = True
@@ -176,9 +162,7 @@ def try_zypper(options: Values) -> bool:
                 package = results[package_name]
             else:
                 package = Package(name=package_name)
-            if package.version is not None and package.version != parsed.group(
-                "version"
-            ):
+            if package.version is not None and package.version != parsed.group("version"):
                 logging.warn(
                     "Version mismatch for: %s installed: %s update says we have %s",
                     package_name,
@@ -205,9 +189,7 @@ def try_dpkg(options: Values) -> bool:
     logging.debug("dpkg is available")
     cmd = ["dpkg", "-l"]
     try:
-        first_output = subprocess.run(
-            cmd, capture_output=True, check=True, encoding="utf-8"
-        )
+        first_output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
         logging.error("Failed to run %s: %s", " ".join(cmd), error)
         return False
@@ -233,11 +215,7 @@ def try_dpkg(options: Values) -> bool:
             name=parsed.group("name"),
             arch=parsed.group("arch"),
             version=parsed.group("version"),
-            description=(
-                parsed.group("description").strip()
-                if options.include_descriptions
-                else None
-            ),
+            description=(parsed.group("description").strip() if options.include_descriptions else None),
             state=PackageState.from_dpkg(parsed.group("state")),
         )
         if package.state == PackageState.UNKNOWN:
@@ -250,9 +228,7 @@ def try_dpkg(options: Values) -> bool:
     cmd = ["apt", "list", "--upgradable"]
     failed = False
     try:
-        update_output = subprocess.run(
-            cmd, capture_output=True, check=True, encoding="utf-8"
-        )
+        update_output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
         logging.error("Failed to run %s: %s", " ".join(cmd), error)
         failed = True
@@ -328,6 +304,7 @@ def main() -> None:
         return
     if try_dpkg(options):
         return
+
 
 if __name__ == "__main__":
     main()
