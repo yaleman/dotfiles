@@ -8,6 +8,7 @@
 # ///
 
 import json
+from pathlib import Path
 import sys
 from typing import Any, Dict, List
 import click
@@ -96,9 +97,24 @@ def parse(response: Dict[str, Any]) -> List[Product]:
     return [Product.model_validate(item) for item in response["response"]["products"]]
 
 
+def get_config() -> List[int]:
+    CONFIG_FILE = "trade_tools_watcher.json"
+    if Path(CONFIG_FILE).exists():
+        return json.loads(Path(CONFIG_FILE).read_text())["categories"]
+    else:
+        return [937]  # Default category ID for "Tool Storage"
+
+
 @click.command()
 @click.option("--debug", is_flag=True, help="Enable debug mode")
-def main(debug: bool) -> None:
+@click.option(
+    "--category",
+    default=get_config(),
+    type=int,
+    help=f"Category ID to fetch products from, defaults to {json.dumps(get_config())}",
+    multiple=True,
+)
+def main(debug: bool, category: List[int]) -> None:
     if debug:
         logger.remove()
         logger.add(sys.stdout, level="DEBUG")
@@ -106,27 +122,28 @@ def main(debug: bool) -> None:
         logger.remove()
         logger.add(sys.stdout, level="INFO")
     try:
-        response = make_request()
-        products = parse(response)
-        for product in products:
-            if product.price < product.base_price:
-                logger.success(
-                    "Price drop detected on {} -> {} (was {}) {}{}",
-                    product.title,
-                    product.price,
-                    product.base_price,
-                    SITE_BASE,
-                    product.path,
-                )
-            else:
-                logger.info(
-                    "No price drop on {} -> {} (was {}) {}{}",
-                    product.title,
-                    product.price,
-                    product.base_price,
-                    SITE_BASE,
-                    product.path,
-                )
+        for cat_id in category:
+            response = make_request(cat_id)
+            products = parse(response)
+            for product in products:
+                if product.price < product.base_price:
+                    logger.success(
+                        "Price drop detected on {} -> {} (was {}) {}{}",
+                        product.title,
+                        product.price,
+                        product.base_price,
+                        SITE_BASE,
+                        product.path,
+                    )
+                else:
+                    logger.info(
+                        "No price drop on {} -> {} (was {}) {}{}",
+                        product.title,
+                        product.price,
+                        product.base_price,
+                        SITE_BASE,
+                        product.path,
+                    )
     except Exception as e:
         logger.error(f"An error occurred: {e}")
 
