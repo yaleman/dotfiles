@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+"""sets up your gitignore file with some common entries"""
+
 import os
 from pathlib import Path
 import re
@@ -8,6 +10,13 @@ import sys
 from loguru import logger
 
 GITIGNORE = ".gitignore"
+
+
+def ask_question() -> str:
+    """asks the user if they want to create a .gitignore file"""
+    logger.info("Do you want to create it? (y/n) ")
+    return input().lower().strip()
+
 
 # check we're in a git dir
 if not os.path.exists("./.git/"):
@@ -18,10 +27,9 @@ try:
     # check if the user wants to create a .gitignore file
     if not os.path.exists(GITIGNORE):
         logger.warning("{} doesn't exist", GITIGNORE)
-        response = ""
+        response = ask_question()
         while response not in ("y", "n"):
-            logger.info("Do you want to create it? (y/n) ")
-            response = input().lower().strip()
+            response = ask_question()
         if response == "n":
             logger.info("Ok, quitting")
             sys.exit(1)
@@ -30,16 +38,15 @@ except KeyboardInterrupt:
     sys.exit(0)
 
 
-def read_file():
+def read_file() -> list[str]:
     """reads the .gitignore file"""
-    with open(GITIGNORE, encoding="utf8") as gitignore_fh:
-        return [line.strip() for line in gitignore_fh.readlines()]
+    with open(GITIGNORE, encoding="utf8") as file_handle:
+        return [line.strip() for line in file_handle.readlines()]
 
 
 EXPECTED_LINES = [
     ".vscode/",
     ".DS_Store",
-    "config.py",
     "dist/",
     ".env",
     ".envrc",  # direnv config
@@ -48,7 +55,7 @@ EXPECTED_LINES = [
 
 # if the key regex matches filenames in the directory, add these
 FILE_MATCHERS = {
-    r"\.tf$": ["terraform.tfstate*"],
+    r"\.tf$": ["terraform.tfstate*", ".terraform/"],
     r"^(\.venv|pyproject\.toml|.py)$": [
         "build/",
         "dist/",
@@ -60,6 +67,9 @@ FILE_MATCHERS = {
     r"^Cargo\.toml": [
         "target/",
     ],
+    r"^config\.py$": [
+        "config.py",
+    ],
 }
 
 filecontents = read_file()
@@ -70,13 +80,9 @@ for line in EXPECTED_LINES:
         needtoadd.append(line)
 
 
-for matcher in FILE_MATCHERS:
+for matcher, files in FILE_MATCHERS.items():
     compiled_re = re.compile(matcher)
-    matched = False
-    for filename in os.listdir("./"):
-        if compiled_re.match(filename):
-            matched = True
-            break
+    matched = any(compiled_re.match(filename) for filename in os.listdir("./"))
     if matched:
         for line in FILE_MATCHERS[matcher]:
             if line not in filecontents and line not in needtoadd:
@@ -90,5 +96,4 @@ logger.info("Adding the following lines:")
 with open(GITIGNORE, "a", encoding="utf8") as gitignore_fh:
     for line in needtoadd:
         logger.info(line)
-    lines = "\n".join(needtoadd)
-    gitignore_fh.write(f"\n{lines}\n")
+    gitignore_fh.write(f"\n{"\n".join(needtoadd)}\n")
