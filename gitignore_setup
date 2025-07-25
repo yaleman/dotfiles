@@ -47,9 +47,11 @@ def read_file() -> list[str]:
 EXPECTED_LINES = [
     ".vscode/",
     ".DS_Store",
-    "dist/",
     ".env",
     ".envrc",  # direnv config
+]
+
+IF_EXISTS = [
     "*.asc",  # gpg files
 ]
 
@@ -79,6 +81,10 @@ for line in EXPECTED_LINES:
     if line not in filecontents and line not in needtoadd:
         needtoadd.append(line)
 
+for line in IF_EXISTS:
+    if Path("./").glob(line):
+        if line not in filecontents and line not in needtoadd:
+            needtoadd.append(line)
 
 for matcher, files in FILE_MATCHERS.items():
     compiled_re = re.compile(matcher)
