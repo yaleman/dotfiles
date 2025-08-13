@@ -2,18 +2,10 @@
 
 set -e
 
-MYBRANCH="$(git branch --show-current)"
-
-if [ -z "${MYBRANCH}" ]; then
-    echo "Not on a branch, exiting"
-    exit 1
-fi
-
 if [ "$(git remote -v | grep -ce "^upstream")" -eq 0 ]; then
     echo "Couldn't find an upstream remote, bailing"
     exit 1
 else
-    # TODO: this is kinda dumb.
     REMOTE="$(git remote | grep -e '^upstream' | head -n1)"
 fi
 
