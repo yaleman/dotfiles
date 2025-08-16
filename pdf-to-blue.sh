@@ -13,4 +13,4 @@ for f in output*.jpg; do
 done
 
 # shellcheck disable=SC2046
-magick $(ls "darkblue-*.jpg" | sort -V) output.pdf
+magick $(find ./ -name "darkblue-*.jpg" | sort -V) output.pdf
