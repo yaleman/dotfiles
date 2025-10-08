@@ -8,6 +8,8 @@ if [ -z "${WIKIDIR}" ]; then
 	exit 1
 fi
 
+find "${WIKIDIR}" -type f -name .DS_Store -ls -exec rm "{}" \;
+
 if [ -d "${WIKIDIR}" ]; then
 	git -C "${WIKIDIR}" fetch --all
 	if [ -f "${WIKIDIR}/cleanup_changelogs.py" ]; then

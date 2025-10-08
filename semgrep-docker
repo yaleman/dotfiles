@@ -1,6 +1,21 @@
 #!/bin/bash
 
-# shellcheck disable=SC2068
+CREATED_TIME="$(docker image ls --format json returntocorp/semgrep:latest | jq -r ' .CreatedAt')"
+
+if [ -z "$CREATED_TIME" ]; then
+    echo "Pulling latest semgrep image..."
+    docker pull returntocorp/semgrep:latest
+else
+    CREATED_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S %z" "$CREATED_TIME" "+%s")
+    NOW_EPOCH=$(date "+%s")
+    AGE=$(( (NOW_EPOCH - CREATED_EPOCH) / 86400 ))
+    if [ "$AGE" -gt 7 ]; then
+        echo "Updating semgrep image (age: $AGE days)..."
+        docker pull returntocorp/semgrep:latest
+    fi
+fi
+
+# # shellcheck disable=SC2068
 docker run --rm -it -v "${PWD}:/src" \
     returntocorp/semgrep \
     semgrep ci --config auto \
