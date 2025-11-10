@@ -15,7 +15,7 @@ else
     fi
 fi
 
-# # shellcheck disable=SC2068
+# shellcheck disable=SC2068
 docker run --rm -it -v "${PWD}:/src" \
     returntocorp/semgrep \
     semgrep ci --config auto \
