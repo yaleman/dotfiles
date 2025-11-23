@@ -1,0 +1,22 @@
+#cloud-config
+#  orb create --arch amd64 ubuntu:noble --user-data $(pwd)/factorio.yml factorio
+users:
+  - default
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - jq
+  - curl
+  - vim
+  - python-is-python3
+  - python3-pip
+  - xz
+
+runcmd:
+  - [sh, -c, echo "=========hello world========="]
+  - ["curl", "-Lv", "-o", "/tmp/factorio-headless.tar.xz", "https://www.factorio.com/get-download/2.0.72/headless/linux64"]
+  - ["tar", "-xf", "/tmp/factorio-headless.tar.xz", "-C", "/opt/factorio", "--strip-components=1"]
+  - ["mkdir", "-p", "/opt/factorio"]
+# TODO: systemd service blah blah
