@@ -13,7 +13,7 @@ ADMIN_PASSWORD="HelloWorld123"
 NAME="splunk-$(basename "$(pwd)")"
 
 echo "Mounting $(pwd) as /data in splunk/splunk:$VERSION container with password $ADMIN_PASSWORD"
-docker run --rm -it --platform linux/amd64 \
+echo "Container ID: $(docker run --rm -it --platform linux/amd64 \
     --name "$NAME" \
     --detach \
     --mount "type=bind,src=$(pwd),target=/data" \
@@ -23,6 +23,6 @@ docker run --rm -it --platform linux/amd64 \
     -p 8000:8000 \
     -p 8089:8089 \
     -p 8088:8088 \
-    "splunk/splunk:$VERSION"
+    "splunk/splunk:$VERSION")"
 
 docker logs -f "$NAME"
