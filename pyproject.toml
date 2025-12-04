@@ -1,17 +1,17 @@
 [project]
 name = "dotfiles"
 version = "0.1.0"
-description = ""
+description = "My random stuff"
 authors = [{ name = "James Hodgkinson", email = "james@terminaloutcomes.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "click>=8.1.7",
-    "loguru>=0.7.2",
-    "pycryptodome>=3.21.0",
-    "pydantic>=2.11.5",
+    "click>=8.3.1",
+    "loguru>=0.7.3",
+    "pycryptodome>=3.23.0",
+    "pydantic>=2.12.5",
     "pypdf2>=3.0.1",
-    "requests>=2.32.3",
+    "requests>=2.32.5",
 ]
 
 [build-system]
@@ -21,10 +21,10 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 120
 
-[tool.uv]
-dev-dependencies = ["mypy>=1.13.0", "pytest==8.3.3", "ruff>=0.7.0"]
-
 [dependency-groups]
 dev = [
+    "mypy>=1.19.0",
+    "pytest>=9.0.1",
+    "ruff>=0.14.7",
     "types-requests>=2.32.0.20250515",
 ]
