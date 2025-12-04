@@ -16,7 +16,7 @@ def test_get_params():
 
     params = get_params(951)
 
-    assert (
-        params["p-id"] == expected_params["p-id"]
-    ), f"Expected p-id {expected_params['p-id']}, but got {params['p-id']}"
+    assert params["p-id"] == expected_params["p-id"], (
+        f"Expected p-id {expected_params['p-id']}, but got {params['p-id']}"
+    )
     assert params == expected_params, f"Expected {expected_params}, but got {params}"
