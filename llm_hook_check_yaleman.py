@@ -45,6 +45,7 @@ class HookDecision(BaseModel):
 
 
 class HookOutput(BaseModel):
+    continue_: bool = Field(default=True, serialization_alias="continue")
     hook_specific_output: Dict[str, Any] = Field(serialization_alias="hookSpecificOutput", default_factory=dict)
     updated_input: Optional[Dict[str, str]] = Field(serialization_alias="updatedInput", default=None)
     system_message: Optional[str] = Field(serialization_alias="systemMessage", default=None)
@@ -109,8 +110,8 @@ def parse_json(inputdata: Dict[str, Any]) -> str:
     for field, value in inputdata.get("tool_input", {}).items():
         if isinstance(value, str) and "yaelman" in value:
             update_fields[field] = value.replace("yaelman", "yaleman")
+    hook_output = HookOutput()
     if update_fields:
-        hook_output = HookOutput()
         if inputdata.get("hook_event_name") == "PreToolUse":
             hook_output.update_inputs(update_fields)
         hook_output.add_system_message("Corrected 'yaelman' to 'yaleman' in the tool input paths.")
@@ -142,4 +143,4 @@ if __name__ == "__main__":
         blind_check_input(stdin)
 
     else:
-        parse_json(inputdata)
+        print(parse_json(inputdata))

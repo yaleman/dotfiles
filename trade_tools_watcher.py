@@ -100,7 +100,7 @@ def parse(response: Dict[str, Any]) -> List[Product]:
 def get_config() -> List[int]:
     CONFIG_FILE = "trade_tools_watcher.json"
     if Path(CONFIG_FILE).exists():
-        return json.loads(Path(CONFIG_FILE).read_text())["categories"]
+        return json.loads(Path(CONFIG_FILE).read_text())["categories"]  # type: ignore[no-any-return]
     else:
         return [937]  # Default category ID for "Tool Storage"
 
