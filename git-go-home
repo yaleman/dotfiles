@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# goes back to the main branch and removes the current one
+
+
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+default_branch=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)
+if [ "$current_branch" != "$default_branch" ]; then
+    git checkout "$default_branch"
+    git branch -D "$current_branch"
+    echo "Switched to '$default_branch' branch and deleted branch '$current_branch'."
+else
+    echo "You are already on the '$default_branch' branch. No action taken."
+fi
