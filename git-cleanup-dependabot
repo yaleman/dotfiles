@@ -1,0 +1,21 @@
+#!/bin/bash
+
+BRANCHES="$(git branch -v | rg dependabot | awk '{print $1}')"
+
+
+if [ -z "$BRANCHES" ]; then
+    echo "No local Dependabot branches found."
+    exit 0
+fi
+echo "Cleaning up local Dependabot branches..."
+echo "--------------------------------"
+echo "$BRANCHES"
+echo "--------------------------------"
+echo "hit ctrl-c to abort or any key to continue"
+read -rn 1 -s
+
+
+for branch in $BRANCHES; do
+    echo "Deleting branch '$branch'"
+    git branch -D "$branch"
+done
