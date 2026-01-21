@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# new-justfile - create a new template justfile with a help command
+
+if [ -f "justfile" ]; then
+	echo "One already exists!"
+	exit 1
+fi
+
+cat > justfile <<EOF
+[private]
+default:
+    just --list
+
+check: fmt lint test
+
+test:
+    echo "No tests yet"
+
+fmt:
+    echo "No formatting yet"
+
+lint:
+    echo "No linting yet"
+EOF
+echo "Done!"
