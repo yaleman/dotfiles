@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# clean up things
+
+echo "Cleaning up uv cache"
+uv cache clean
+
+echo "Docker volume prune"
+docker system prune --all --force --volumes || true
+docker system prune --all --force || true
+
+echo "Cleaning up brew"
+brew cleanup --prune=all
+
+echo "Cleaning up pip - $(du -sh "$(pip cache dir)")"
+pip cache purge --no-input
+
+echo "Cleaning up npm cache"
+npm cache clean --force
+
+echo "Cleaning up cargo target dirs"
+clean-big-targets --delete --force "$HOME/Projects"
