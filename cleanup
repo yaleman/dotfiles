@@ -20,3 +20,5 @@ npm cache clean --force
 
 echo "Cleaning up cargo target dirs"
 clean-big-targets --delete --force "$HOME/Projects"
+
+venv-cleaner "$HOME/Projects" --delete

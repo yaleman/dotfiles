@@ -1,0 +1,15 @@
+#!/bin/bash
+
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <path-to-virtualenv>"
+  exit 1
+fi
+
+# check if "--delete" in args
+if [[ " $* " =~ " --delete " ]]; then
+  echo "Deleting virtual environments in $1"
+  fd '^\.venv' "$1" --hidden --type d --max-depth 5 --exec du -sh {} \; --exec rm -rf {} \;
+else
+  fd '^\.venv' "$1" --hidden --type d --max-depth 5 --exec du -sh {} \;
+fi
