@@ -2,23 +2,37 @@
 
 # clean up things
 
-echo "Cleaning up uv cache"
+BOLD="\033[1m"
+RESET="\033[0m"
+
+echo -e "${BOLD}Cleaning up uv cache${RESET}"
 uv cache clean
 
-echo "Docker volume prune"
+echo -e "${BOLD}Docker volume prune${RESET}"
 docker system prune --all --force --volumes || true
 docker system prune --all --force || true
 
-echo "Cleaning up brew"
+echo -e "${BOLD}Cleaning up brew${RESET}"
 brew cleanup --prune=all
 
-echo "Cleaning up pip - $(du -sh "$(pip cache dir)")"
+echo -e "${BOLD}Cleaning up pip - $(du -sh "$(pip cache dir)")${RESET}"
 pip cache purge --no-input
 
-echo "Cleaning up npm cache"
+echo -e "${BOLD}Cleaning up npm cache${RESET}"
 npm cache clean --force
 
-echo "Cleaning up cargo target dirs"
+echo -e "${BOLD}Cleaning up cargo target dirs${RESET}"
 clean-big-targets --delete --force "$HOME/Projects"
 
+echo -e "${BOLD}Cleaning up python venvs${RESET}"
 venv-cleaner "$HOME/Projects" --delete
+
+echo -e "${BOLD}Cleaning up mise cache${RESET}"
+mise cache clear
+
+if [ -n "$(which poetry)" ]; then
+    echo -e "${BOLD}Cleaning up poetry cache${RESET}"
+    poetry cache clear --all
+else
+    echo -e "${BOLD}Poetry not installed, skipping poetry cache cleanup${RESET}"
+fi
