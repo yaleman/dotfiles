@@ -1,0 +1,63 @@
+[tasks.cleanup-go-cache]
+description = "Clean go cache"
+run = "go clean -modcache"
+
+[tasks.cleanup-docker]
+description = "Clean docker cache"
+run = '''
+docker system prune --all --force --volumes || true
+docker system prune --all --force || true
+'''
+
+[tasks.cleanup-uv]
+description = "Clean uv cache"
+run = "uv cache clean"
+
+[tasks.cleanup-brew]
+description = "Clean brew cache"
+run = "brew cleanup --prune=all"
+
+[tasks.cleanup-pip]
+description = "Clean pip cache"
+run = "pip cache purge --no-input"
+
+[tasks.cleanup-big-targets]
+description = "Clean big targets"
+run = '''
+clean-big-targets --delete --force "$HOME/Projects"
+'''
+
+[tasks.cleanup-venvs]
+description = "Clean venvs"
+run = '''
+venv-cleaner "$HOME/Projects" --delete
+'''
+
+[tasks.cleanup-mise]
+description = "Clean mise cache and runs prune"
+run = ["mise cache clear", "mise prune"]
+
+[tasks.cleanup-poetry]
+description = "Clean poetry cache"
+run = '''
+if [ -n "$(which poetry)" ]; then
+    echo -e "${BOLD}Cleaning up poetry cache${RESET}"
+    poetry cache list | xargs -n1 poetry cache clear --all --no-interaction
+else
+    echo -e "${BOLD}Poetry not installed, skipping poetry cache cleanup${RESET}"
+fi
+'''
+
+
+[tasks.cleanup]
+depends = [
+    "cleanup-go-cache",
+    "cleanup-docker",
+    "cleanup-uv",
+    "cleanup-brew",
+    "cleanup-pip",
+    "cleanup-big-targets",
+    "cleanup-venvs",
+    "cleanup-mise",
+    "cleanup-poetry",
+]

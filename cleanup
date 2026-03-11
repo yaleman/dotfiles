@@ -1,38 +1,6 @@
 #!/bin/bash
 
-# clean up things
+# clean up things, migrated to using mise for parallelism
+mise --cd "$(dirname "$0")" cleanup
 
-BOLD="\033[1m"
-RESET="\033[0m"
-
-echo -e "${BOLD}Cleaning up uv cache${RESET}"
-uv cache clean
-
-echo -e "${BOLD}Docker volume prune${RESET}"
-docker system prune --all --force --volumes || true
-docker system prune --all --force || true
-
-echo -e "${BOLD}Cleaning up brew${RESET}"
-brew cleanup --prune=all
-
-echo -e "${BOLD}Cleaning up pip - $(du -sh "$(pip cache dir)")${RESET}"
-pip cache purge --no-input
-
-echo -e "${BOLD}Cleaning up npm cache${RESET}"
-npm cache clean --force
-
-echo -e "${BOLD}Cleaning up cargo target dirs${RESET}"
-clean-big-targets --delete --force "$HOME/Projects"
-
-echo -e "${BOLD}Cleaning up python venvs${RESET}"
-venv-cleaner "$HOME/Projects" --delete
-
-echo -e "${BOLD}Cleaning up mise cache${RESET}"
-mise cache clear
-
-if [ -n "$(which poetry)" ]; then
-    echo -e "${BOLD}Cleaning up poetry cache${RESET}"
-    poetry cache clear --all
-else
-    echo -e "${BOLD}Poetry not installed, skipping poetry cache cleanup${RESET}"
-fi
+echo "Done!"
