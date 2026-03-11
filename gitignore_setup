@@ -1,5 +1,9 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = [
+# "loguru",
+# ]
+# ///
 """sets up your gitignore file with some common entries"""
 
 import os
@@ -102,4 +106,4 @@ logger.info("Adding the following lines:")
 with open(GITIGNORE, "a", encoding="utf8") as gitignore_fh:
     for line in needtoadd:
         logger.info(line)
-    gitignore_fh.write(f"\n{"\n".join(needtoadd)}\n")
+    gitignore_fh.write(f"\n{'\n'.join(needtoadd)}\n")
