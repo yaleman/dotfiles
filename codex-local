@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   codex-run openai   [extra codex args...]
+#   codex-run ollama   [extra codex args...]
+
+MODEL="${MODEL:-qwen3-coder-next}"
+
+codex \
+      -c model="${MODEL}" \
+      -c model_provider="ollama" \
+      -c model_context_window=32768 \
+      -c model_supports_reasoning_summaries=false \
+      -c model_reasoning_summary="none" \
+      -c model_providers.ollama.base_url="http://localhost:11434/v1" \
+      -c model_providers.ollama.name="Ollama (local)" \
+      "$@"
