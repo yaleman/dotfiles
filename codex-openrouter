@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+codex \
+      -c model="stepfun/step-3.5-flash:free" \
+      -c model_provider="openrouter" \
+      -c model_reasoning_effort="high" \
+      -c model_providers.openrouter.base_url="https://openrouter.ai/api/v1" \
+      -c model_providers.openrouter.name="OpenRouter (step-3.5-flash:free)" \
+      -c model_providers.openrouter.env_key="OPENROUTER_API_KEY" \
+      "$@"

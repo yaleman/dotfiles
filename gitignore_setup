@@ -106,4 +106,5 @@ logger.info("Adding the following lines:")
 with open(GITIGNORE, "a", encoding="utf8") as gitignore_fh:
     for line in needtoadd:
         logger.info(line)
-    gitignore_fh.write(f"\n{'\n'.join(needtoadd)}\n")
+    joined = "\n".join(needtoadd)
+    gitignore_fh.write(f"\n{joined}\n")
