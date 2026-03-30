@@ -4,7 +4,7 @@ if [ -n "$1" ]; then
   echo "Running in test mode with checks: $1"
   CHECKS="$1"
 else
-    CHECKS="cargo fmt && cargo clippy && cargo test"
+    CHECKS="uv run ruff check && uv run ty check && uv run pytest"
 fi
 
 PROMPT="run \`${CHECKS}\` and update the code so it works, this is a package update PR so if you have to downgrade things rather than update them then report it and stop work. when you think you're done, run \`${CHECKS}\` and validate that everything is working and then report that you are done and what you did to fix the code."
