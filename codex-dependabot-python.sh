@@ -1,8 +1,8 @@
 #!/bin/bash
 
 if [ -n "$1" ]; then
-  echo "Running in test mode with checks: $1"
-  CHECKS="$1"
+  echo "Running with checks: $*"
+  CHECKS="$*"
 else
     CHECKS="uv run ruff check && uv run ty check && uv run pytest"
 fi
