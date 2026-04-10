@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 from typing import Any
 
@@ -201,11 +203,28 @@ def render_output(episodes: list[EpisodeMetadata], as_json: bool) -> str:
     return "\n".join(episode.episode_url for episode in episodes)
 
 
+def yt_dlp_command(episodes: list[EpisodeMetadata]) -> list[str]:
+    yt_dlp_path = shutil.which("yt-dlp")
+    if yt_dlp_path is None:
+        raise click.ClickException("yt-dlp was not found on PATH")
+    return [yt_dlp_path, *(episode.episode_url for episode in episodes)]
+
+
+def download_episodes(episodes: list[EpisodeMetadata]) -> None:
+    command = yt_dlp_command(episodes)
+    logger.info(f"Running {' '.join(command)}")
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as error:
+        raise click.ClickException(f"yt-dlp exited with status {error.returncode}") from error
+
+
 @click.command()
 @click.argument("url")
 @click.option("--json", "as_json", is_flag=True, help="Emit structured episode metadata as JSON")
+@click.option("--download", is_flag=True, help="Pass extracted episode URLs to yt-dlp")
 @click.option("--debug", is_flag=True, help="Enable debug logging")
-def main(url: str, as_json: bool, debug: bool) -> None:
+def main(url: str, as_json: bool, download: bool, debug: bool) -> None:
     logger.remove()
     logger.add(sys.stderr, level="DEBUG" if debug else "INFO")
 
@@ -216,6 +235,10 @@ def main(url: str, as_json: bool, debug: bool) -> None:
     if not episodes:
         logger.error("No episodes found in decoded SBS payload")
         raise SystemExit(1)
+
+    if download:
+        download_episodes(episodes)
+        return
 
     click.echo(render_output(episodes, as_json))
 
@@ -230,6 +253,7 @@ __all__ = [
     "decode_reference",
     "decode_seasons",
     "decode_value",
+    "download_episodes",
     "extract_episode_metadata",
     "extract_json",
     "extract_payload_text",
@@ -237,4 +261,5 @@ __all__ = [
     "main",
     "render_output",
     "season_slug_for",
+    "yt_dlp_command",
 ]

@@ -137,3 +137,37 @@ def test_cli_json_output(monkeypatch: pytest.MonkeyPatch, fixture_name: str) -> 
         "episode_number": 1,
         "title": "Episode 1",
     }
+
+
+def test_cli_download_passes_urls_to_yt_dlp(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = load_payload("catch_22")
+    runner = CliRunner()
+    calls: list[tuple[list[str], bool]] = []
+
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+    monkeypatch.setattr(sbs_dlp.shutil, "which", lambda _: "/opt/homebrew/bin/yt-dlp")
+
+    def fake_run(command: list[str], check: bool) -> None:
+        calls.append((command, check))
+
+    monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
+
+    result = runner.invoke(sbs_dlp.main, ["--download", FIXTURE_URLS["catch_22"]])
+
+    assert result.exit_code == 0
+    assert "Running /opt/homebrew/bin/yt-dlp" in result.output
+    assert calls == [
+        (
+            [
+                "/opt/homebrew/bin/yt-dlp",
+                "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep1/2474793027793",
+                "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep2/2474793027794",
+                "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep3/2474793027795",
+                "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep4/2474793027796",
+                "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep5/2474793027797",
+                "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep6/2474793027798",
+            ],
+            True,
+        )
+    ]
