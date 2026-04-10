@@ -146,7 +146,6 @@ def test_cli_download_passes_urls_to_yt_dlp(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
     monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
-    monkeypatch.setattr(sbs_dlp.shutil, "which", lambda _: "/opt/homebrew/bin/yt-dlp")
 
     def fake_run(command: list[str], check: bool) -> None:
         calls.append((command, check))
@@ -156,11 +155,12 @@ def test_cli_download_passes_urls_to_yt_dlp(monkeypatch: pytest.MonkeyPatch) -> 
     result = runner.invoke(sbs_dlp.main, ["--download", FIXTURE_URLS["catch_22"]])
 
     assert result.exit_code == 0
-    assert "Running /opt/homebrew/bin/yt-dlp" in result.output
+    assert "Running uvx yt-dlp" in result.output
     assert calls == [
         (
             [
-                "/opt/homebrew/bin/yt-dlp",
+                "uvx",
+                "yt-dlp",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep1/2474793027793",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep2/2474793027794",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep3/2474793027795",

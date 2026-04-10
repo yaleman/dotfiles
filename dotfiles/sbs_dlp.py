@@ -6,7 +6,6 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 from typing import Any
@@ -204,10 +203,7 @@ def render_output(episodes: list[EpisodeMetadata], as_json: bool) -> str:
 
 
 def yt_dlp_command(episodes: list[EpisodeMetadata]) -> list[str]:
-    yt_dlp_path = shutil.which("yt-dlp")
-    if yt_dlp_path is None:
-        raise click.ClickException("yt-dlp was not found on PATH")
-    return [yt_dlp_path, *(episode.episode_url for episode in episodes)]
+    return ["uvx", "yt-dlp", *(episode.episode_url for episode in episodes)]
 
 
 def download_episodes(episodes: list[EpisodeMetadata]) -> None:
