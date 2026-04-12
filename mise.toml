@@ -51,13 +51,13 @@ fi
 
 [tasks.cleanup]
 depends = [
-    "cleanup-go-cache",
-    "cleanup-docker",
-    "cleanup-uv",
-    "cleanup-brew",
-    "cleanup-pip",
-    "cleanup-big-targets",
-    "cleanup-venvs",
-    "cleanup-mise",
-    "cleanup-poetry",
+  "cleanup-go-cache",
+  "cleanup-docker",
+  "cleanup-uv",
+  "cleanup-brew",
+  "cleanup-pip",
+  "cleanup-big-targets",
+  "cleanup-venvs",
+  "cleanup-mise",
+  "cleanup-poetry",
 ]

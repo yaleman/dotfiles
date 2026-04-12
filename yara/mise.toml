@@ -1,0 +1,10 @@
+[tasks.format]
+run = "yr fmt ."
+
+[tasks.build]
+depends = ["format"]
+run = "yr compile ."
+
+[tasks.scan]
+depends = ["build"]
+run = "yr scan . ~/Projects  --recursive"
