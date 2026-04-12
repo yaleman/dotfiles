@@ -163,7 +163,7 @@ def try_zypper(options: Values) -> bool:
             else:
                 package = Package(name=package_name)
             if package.version is not None and package.version != parsed.group("version"):
-                logging.warn(
+                logging.warning(
                     "Version mismatch for: %s installed: %s update says we have %s",
                     package_name,
                     package.version,
@@ -219,7 +219,7 @@ def try_dpkg(options: Values) -> bool:
             state=PackageState.from_dpkg(parsed.group("state")),
         )
         if package.state == PackageState.UNKNOWN:
-            logging.warn(
+            logging.warning(
                 'Unknown state for package: %s line="%s"',
                 json.dumps(package.__dict__),
                 line,

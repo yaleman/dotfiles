@@ -11,17 +11,17 @@ code in this repository.
 - **Linting**: `uv run ruff check *.py`
 - **Formatting**: `uv run ruff fmt *.py`
 - **Testing**: `uv run pytest`
-- **Complete Python workflow**: `just python` (runs mypy, ruff check, and
+- **Complete Python workflow**: `mise run python-check` (runs mypy, ruff check, and
   pytest)
 
 ### Shell Script Validation
 
-- **Shellcheck all scripts**: `make shellcheck`
-- **Spell checking**: `just codespell`
+- **Shellcheck all scripts**: `mise run shellcheck`
+- **Spell checking**: `mise run codespell`
 
 ### Build Tasks
 
-- **Build howmanytabs AppleScript**: `make howmanytabs`
+- **Build howmanytabs AppleScript**: `mise run howmanytabs`
 
 ## Repository Architecture
 

@@ -51,13 +51,39 @@ fi
 
 [tasks.cleanup]
 depends = [
-  "cleanup-go-cache",
-  "cleanup-docker",
-  "cleanup-uv",
-  "cleanup-brew",
-  "cleanup-pip",
-  "cleanup-big-targets",
-  "cleanup-venvs",
-  "cleanup-mise",
-  "cleanup-poetry",
+    "cleanup-go-cache",
+    "cleanup-docker",
+    "cleanup-uv",
+    "cleanup-brew",
+    "cleanup-pip",
+    "cleanup-big-targets",
+    "cleanup-venvs",
+    "cleanup-mise",
+    "cleanup-poetry",
 ]
+
+
+[tasks.python-ty]
+run = "uv run ty check"
+
+[tasks.python-ruff]
+run = "uv run ruff check"
+
+[tasks.python-test]
+run = "uv run pytest"
+
+[tasks.python-check]
+depends = ["python-ty", "python-ruff", "python-test"]
+
+[tasks.shellcheck]
+run = '''find . -type f -not -path './.git/*' -exec file "{}" \; | grep 'shell script' | awk -F':' '{print $$1}' | xargs shellcheck'''
+
+[tasks.codespell]
+run = "uvx codespell"
+
+[tasks.howmanytabs]
+run = "osacompile -o howmanytabsraw howmanytabsraw.applescript"
+
+[tools]
+shellcheck = "latest"
+uv = "latest"

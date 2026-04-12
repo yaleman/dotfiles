@@ -14,7 +14,7 @@ function safariTabs () {
             echo "Compiling howmanytabsraw"
         fi
 
-        make howmanytabs
+        mise run howmanytabs
     fi
 
 
