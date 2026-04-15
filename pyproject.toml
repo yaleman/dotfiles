@@ -33,4 +33,4 @@ dev = [
 kokoro = ["kokoro>=0.9.4", "soundfile>=0.13.1", "numpy>=2.4.4"]
 
 [project.scripts]
-sbs-dlp = "dotfiles.scripts.sbs_dlp:main"
+sbs-dlp = "dotfiles.sbs_dlp:main"
