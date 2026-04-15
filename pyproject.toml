@@ -7,14 +7,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.3.1",
-    "kokoro>=0.9.4",
     "loguru>=0.7.3",
-    "numpy>=2.4.4",
     "pycryptodome>=3.23.0",
-    "pydantic>=2.12.5",
+    "pydantic>=2.13.0",
     "pypdf2>=3.0.1",
-    "requests>=2.32.5",
-    "soundfile>=0.13.1",
+    "requests>=2.33.1",
 ]
 
 [build-system]
@@ -32,3 +29,8 @@ dev = [
     "ty>=0.0.29",
     "types-requests>=2.32.0.20250515",
 ]
+
+kokoro = ["kokoro>=0.9.4", "soundfile>=0.13.1", "numpy>=2.4.4"]
+
+[project.scripts]
+sbs-dlp = "dotfiles.scripts.sbs_dlp:main"
