@@ -202,12 +202,13 @@ def render_output(episodes: list[EpisodeMetadata], as_json: bool) -> str:
     return "\n".join(episode.episode_url for episode in episodes)
 
 
-def yt_dlp_command(episodes: list[EpisodeMetadata]) -> list[str]:
-    return ["uvx", "yt-dlp", *(episode.episode_url for episode in episodes)]
+def yt_dlp_command(episodes: list[EpisodeMetadata], subs: bool = False) -> list[str]:
+    subtitle_args = ["--all-subs"] if subs else []
+    return ["uvx", "yt-dlp", *subtitle_args, *(episode.episode_url for episode in episodes)]
 
 
-def download_episodes(episodes: list[EpisodeMetadata]) -> None:
-    command = yt_dlp_command(episodes)
+def download_episodes(episodes: list[EpisodeMetadata], subs: bool = False) -> None:
+    command = yt_dlp_command(episodes, subs=subs)
     logger.info(f"Running {' '.join(command)}")
     try:
         subprocess.run(command, check=True)
@@ -219,8 +220,9 @@ def download_episodes(episodes: list[EpisodeMetadata]) -> None:
 @click.argument("url")
 @click.option("--json", "as_json", is_flag=True, help="Emit structured episode metadata as JSON")
 @click.option("--download", is_flag=True, help="Pass extracted episode URLs to yt-dlp")
+@click.option("--subs", is_flag=True, help="Pass --all-subs to yt-dlp when downloading")
 @click.option("--debug", is_flag=True, help="Enable debug logging")
-def main(url: str, as_json: bool, download: bool, debug: bool) -> None:
+def main(url: str, as_json: bool, download: bool, subs: bool, debug: bool) -> None:
     logger.remove()
     logger.add(sys.stderr, level="DEBUG" if debug else "INFO")
 
@@ -233,7 +235,7 @@ def main(url: str, as_json: bool, download: bool, debug: bool) -> None:
         raise SystemExit(1)
 
     if download:
-        download_episodes(episodes)
+        download_episodes(episodes, subs=subs)
         return
 
     click.echo(render_output(episodes, as_json))
