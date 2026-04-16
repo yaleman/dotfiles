@@ -15,47 +15,14 @@ from loguru import logger
 
 GITIGNORE = ".gitignore"
 
-
-def ask_question() -> str:
-    """asks the user if they want to create a .gitignore file"""
-    logger.info("Do you want to create it? (y/n) ")
-    return input().lower().strip()
-
-
-# check we're in a git dir
-if not os.path.exists("./.git/"):
-    logger.error("You're not in a git repository, quitting.")
-    sys.exit(1)
-
-try:
-    # check if the user wants to create a .gitignore file
-    if not os.path.exists(GITIGNORE):
-        logger.warning("{} doesn't exist", GITIGNORE)
-        response = ask_question()
-        while response not in ("y", "n"):
-            response = ask_question()
-        if response == "n":
-            logger.info("Ok, quitting")
-            sys.exit(1)
-        Path(GITIGNORE).touch(mode=0o644, exist_ok=True)
-except KeyboardInterrupt:
-    sys.exit(0)
-
-
-def read_file() -> list[str]:
-    """reads the .gitignore file"""
-    with open(GITIGNORE, encoding="utf8") as file_handle:
-        return [line.strip() for line in file_handle.readlines()]
-
-
-EXPECTED_LINES = [
+ALWAYS_ADD = [
     ".vscode/",
     ".DS_Store",
     ".env",
     ".envrc",  # direnv config
 ]
 
-IF_EXISTS = [
+IF_EXISTS_ADD = [
     "*.asc",  # gpg files
 ]
 
@@ -78,14 +45,49 @@ FILE_MATCHERS = {
     ],
 }
 
+
+def ask_question() -> str:
+    """asks the user if they want to create a .gitignore file"""
+    logger.info("Do you want to create {}? (y/n) ", GITIGNORE)
+    return input().lower().strip()
+
+
+# check we're in a git dir
+if not os.path.exists("./.git/"):
+    logger.error("You're not in a git repository, quitting.")
+    sys.exit(1)
+
+try:
+    # check if the user wants to create a .gitignore file
+    if not os.path.exists(GITIGNORE):
+        logger.debug("{} doesn't exist", GITIGNORE)
+        response = ask_question()
+        while response not in ("y", "n"):
+            response = ask_question()
+        if response == "n":
+            logger.info("Ok, quitting")
+            sys.exit(1)
+        Path(GITIGNORE).touch(mode=0o644, exist_ok=True)
+except KeyboardInterrupt:
+    sys.exit(0)
+
+
+def read_file() -> list[str]:
+    """reads the .gitignore file"""
+    with open(GITIGNORE, encoding="utf8") as file_handle:
+        return [line.strip() for line in file_handle.readlines()]
+
+
 filecontents = read_file()
 
+# things we're going to add to the .gitignore file, if they're not already there
 needtoadd = []
-for line in EXPECTED_LINES:
+
+for line in ALWAYS_ADD:
     if line not in filecontents and line not in needtoadd:
         needtoadd.append(line)
 
-for line in IF_EXISTS:
+for line in IF_EXISTS_ADD:
     if Path("./").glob(line):
         if line not in filecontents and line not in needtoadd:
             needtoadd.append(line)
@@ -107,4 +109,8 @@ with open(GITIGNORE, "a", encoding="utf8") as gitignore_fh:
     for line in needtoadd:
         logger.info(line)
     joined = "\n".join(needtoadd)
-    gitignore_fh.write(f"\n{joined}\n")
+    try:
+        gitignore_fh.write(f"\n{joined}\n")
+    except Exception as e:
+        logger.error("Error writing to file: {}", e)
+        sys.exit(1)
