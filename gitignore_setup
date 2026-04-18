@@ -6,6 +6,10 @@
 # ///
 """sets up your gitignore file with some common entries"""
 
+from typing import List
+
+from dataclasses import dataclass
+
 import os
 from pathlib import Path
 import re
@@ -26,24 +30,32 @@ IF_EXISTS_ADD = [
     "*.asc",  # gpg files
 ]
 
+
+@dataclass
+class FileMatcher:
+    language: str
+    regex: str
+    files: list[str]
+
+
 # if the key regex matches filenames in the directory, add these
-FILE_MATCHERS = {
-    r"\.tf$": ["terraform.tfstate*", ".terraform/"],
-    r"^(\.venv|pyproject\.toml|.py)$": [
-        "build/",
-        "dist/",
-        "*.pyc",
-        "*.egg-info/",
-        "**/__pycache__/*",
-        ".venv",
-    ],
-    r"^Cargo\.toml": [
-        "target/",
-    ],
-    r"^config\.py$": [
-        "config.py",
-    ],
-}
+FILE_MATCHERS: List[FileMatcher] = [
+    FileMatcher(language="Terraform", regex=r"\.tf$", files=["terraform.tfstate*", ".terraform/"]),
+    FileMatcher(
+        language="Python",
+        regex=r"^(\.venv|pyproject\.toml|.py)$",
+        files=[
+            "build/",
+            "dist/",
+            "*.pyc",
+            "*.egg-info/",
+            "**/__pycache__/*",
+            ".venv",
+        ],
+    ),
+    FileMatcher(language="Python", regex=r"^config\.py$", files=["config.py"]),
+    FileMatcher(language="Rust", regex=r"^Cargo\.toml", files=["target/"]),
+]
 
 
 def ask_question() -> str:
@@ -92,13 +104,18 @@ for line in IF_EXISTS_ADD:
         if line not in filecontents and line not in needtoadd:
             needtoadd.append(line)
 
-for matcher, files in FILE_MATCHERS.items():
-    compiled_re = re.compile(matcher)
+for matcher in FILE_MATCHERS:
+    compiled_re = re.compile(matcher.regex)
     matched = any(compiled_re.match(filename) for filename in os.listdir("./"))
     if matched:
-        for line in FILE_MATCHERS[matcher]:
+        logger.info("Found {} files", matcher.language)
+        newlines = []
+        for line in matcher.files:
             if line not in filecontents and line not in needtoadd:
-                needtoadd.append(line)
+                newlines.append(line)
+        if newlines:
+            logger.info("Adding {} lines for {}: {}", len(newlines), matcher.language, newlines)
+            needtoadd.extend(newlines)
 
 if not needtoadd:
     logger.info("File is OK!")

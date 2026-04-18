@@ -25,12 +25,17 @@ line-length = 120
 dev = [
     "mypy>=1.19.0",
     "pytest>=9.0.3",
-    "ruff>=0.14.7",
-    "ty>=0.0.29",
+    "ruff>=0.15.11",
+    "ty>=0.0.31",
     "types-requests>=2.32.0.20250515",
 ]
 
-kokoro = ["kokoro>=0.9.4", "soundfile>=0.13.1", "numpy>=2.4.4"]
+kokoro = [
+    "kokoro>=0.9.4",
+    "soundfile>=0.13.1",
+    "numpy>=2.4.4",
+    "misaki[en]>=0.9.4",
+]
 
 [project.scripts]
 sbs-dlp = "dotfiles.sbs_dlp:main"
