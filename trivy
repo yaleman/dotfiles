@@ -1,0 +1,19 @@
+#!/bin/bash
+
+CONTAINER="aquasec/trivy:latest"
+
+
+CURRENT_DIR="$(dirname "$(realpath "$0")")"
+MYDIR=$(dirname "$0")
+
+# cd "$MYDIR" || exit 1
+
+uv run --project "$MYDIR" "$MYDIR/docker-pull-latest-ish.py" "$CONTAINER"
+
+if [ ! -d "$HOME/.cache/trivy" ]; then
+    mkdir -p "$HOME/.cache/trivy"
+fi
+
+docker run --rm -it \
+    --mount "type=bind,src=$HOME/.cache/trivy,target=/root/.cache/" \
+    --mount "type=bind,source=$CURRENT_DIR,target=/src" "$CONTAINER" filesystem /src

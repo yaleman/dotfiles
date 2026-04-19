@@ -1,3 +1,7 @@
+[tasks.clear-trivy-cache]
+description = "Clear trivy cache"
+run = "rm -rf $HOME/.cache/trivy || true"
+
 [tasks.cleanup-go-cache]
 description = "Clean go cache"
 run = "go clean -modcache"
@@ -64,19 +68,19 @@ depends = [
 
 
 [tasks.python-ty]
-run = "uv run ty check"
+run = "uv run --all-groups --all-extras ty check"
 
 [tasks.python-ruff]
-run = "uv run ruff check"
+run = "uv run --all-groups --all-extras ruff check"
 
 [tasks.python-test]
-run = "uv run pytest"
+run = "uv run --all-groups --all-extras pytest"
 
 [tasks.python-check]
 depends = ["python-ty", "python-ruff", "python-test"]
 
 [tasks.shellcheck]
-run = '''find . -type f -not -path './.git/*' -exec file "{}" \; | grep 'shell script' | awk -F':' '{print $$1}' | xargs shellcheck'''
+run = '''find . -type f -not -path './.git/*' -exec file "{}" \; | grep 'shell script' | awk -F':' '{print $1}' | xargs shellcheck'''
 
 [tasks.codespell]
 run = "uvx codespell"
@@ -84,6 +88,8 @@ run = "uvx codespell"
 [tasks.howmanytabs]
 run = "osacompile -o howmanytabsraw howmanytabsraw.applescript"
 
+[tasks.check]
+depends = ["shellcheck", "codespell", "python-check"]
 [tools]
 shellcheck = "latest"
 uv = "latest"

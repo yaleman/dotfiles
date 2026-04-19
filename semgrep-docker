@@ -1,20 +1,8 @@
 #!/bin/bash
 
-CREATED_TIME="$(docker image ls --format json returntocorp/semgrep:latest | jq -r ' .CreatedAt')"
-
-if [ -z "$CREATED_TIME" ]; then
-    echo "Pulling latest semgrep image..."
-    docker pull returntocorp/semgrep:latest
-else
-    CREATED_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S %z" "$CREATED_TIME" "+%s")
-    NOW_EPOCH=$(date "+%s")
-    AGE=$(( (NOW_EPOCH - CREATED_EPOCH) / 86400 ))
-    if [ "$AGE" -gt 7 ]; then
-        echo "Updating semgrep image (age: $AGE days)..."
-        docker pull returntocorp/semgrep:latest
-    fi
-fi
-
+MYDIR=$(dirname "$0")
+CONTAINER_NAME="returntocorp/semgrep:latest"
+uv run --project "$MYDIR" "$MYDIR/docker-pull-latest-ish.py" "$CONTAINER_NAME"
 
 if [ -f .semgreprc ]; then
     SEMGREP_EXTRAS=$(cat .semgreprc | sed -E 's/^\s*#.*$//g' | tr '\n' ' ')
@@ -25,6 +13,6 @@ fi
 
 # shellcheck disable=SC2068,SC2086
 docker run --rm -it -v "${PWD}:/src" \
-    returntocorp/semgrep \
+    "$CONTAINER_NAME" \
     semgrep ci --config auto \
     --exclude-rule "yaml.github-actions.security.third-party-action-not-pinned-to-commit-sha.third-party-action-not-pinned-to-commit-sha" $SEMGREP_EXTRAS $@
