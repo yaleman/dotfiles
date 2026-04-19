@@ -15,8 +15,16 @@ else
     fi
 fi
 
+
+if [ -f .semgreprc ]; then
+    SEMGREP_EXTRAS=$(cat .semgreprc | sed -E 's/^\s*#.*$//g' | tr '\n' ' ')
+else
+    SEMGREP_EXTRAS=""
+fi
+
+
 # shellcheck disable=SC2068
 docker run --rm -it -v "${PWD}:/src" \
     returntocorp/semgrep \
     semgrep ci --config auto \
-    --exclude-rule "yaml.github-actions.security.third-party-action-not-pinned-to-commit-sha.third-party-action-not-pinned-to-commit-sha" $@
+    --exclude-rule "yaml.github-actions.security.third-party-action-not-pinned-to-commit-sha.third-party-action-not-pinned-to-commit-sha" $SEMGREP_EXTRAS $@
