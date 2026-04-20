@@ -10,9 +10,10 @@ dependencies = [
     "docker>=7.1.0",
     "loguru>=0.7.3",
     "pycryptodome>=3.23.0",
-    "pydantic>=2.13.2",
+    "pydantic>=2.13.1",
     "pypdf2>=3.0.1",
     "requests>=2.33.1",
+    "tomlkit>=0.14.0",
 ]
 
 [build-system]
