@@ -9,6 +9,8 @@ import click
 UV_CONFIG = Path.home() / ".config" / "uv" / "uv.toml"
 PIP_CONFIG = Path.home() / ".config" / "pip" / "pip.conf"
 
+AGING_CONFIG = "P1D"  # "1 day" in RFC 3339 format
+
 
 def create_if_not_exists(config_file: Path) -> bool:
     if not config_file.parent.exists():
@@ -26,15 +28,18 @@ def configure_uv(config_file: Path) -> bool:
 
     uv_data = tomlkit.parse(config_file.read_text(encoding="utf-8"))
 
-    if "exclude-newer" not in uv_data:
-        uv_data["exclude-newer"] = "P3D"  # "3 days" in RFC 3339 format
+    if uv_data.get("exclude-newer") != AGING_CONFIG:
+        uv_data["exclude-newer"] = AGING_CONFIG
         changed = True
 
     if changed:
         config_file.write_text(tomlkit.dumps(uv_data))
-        print(f"Updated {config_file} with uv dependency aging configuration.", file=sys.stderr)
+        print(f"Updated {config_file} with uv dependency aging configuration. ({AGING_CONFIG=})", file=sys.stderr)
     else:
-        print(f"{config_file} already has the necessary configuration, no changes made.", file=sys.stderr)
+        print(
+            f"{config_file} already has the necessary configuration ({AGING_CONFIG=}), no changes made.",
+            file=sys.stderr,
+        )
     return changed
 
 
@@ -46,15 +51,17 @@ def configure_pip(config_file: Path) -> bool:
 
     pip_data = tomlkit.parse(config_file.read_text(encoding="utf-8"))
 
-    if pip_data.get("install", {}).get("uploaded-prior-to") != "P3D":
-        pip_data["install"] = {"uploaded-prior-to": "P3D"}
+    if pip_data.get("install", {}).get("uploaded-prior-to") != AGING_CONFIG:
+        pip_data["install"] = {"uploaded-prior-to": AGING_CONFIG}
         changed = True
 
     if changed:
         config_file.write_text(tomlkit.dumps(pip_data))
-        print(f"Updated {config_file} with pip dependency aging configuration.", file=sys.stderr)
+        print(f"Updated {config_file} with pip dependency aging configuration. ({AGING_CONFIG=})", file=sys.stderr)
     else:
-        print(f"{config_file} already has the necessary configuration, no changes made.", file=sys.stderr)
+        print(
+            f"{config_file} already has the necessary configuration {AGING_CONFIG=}, no changes made.", file=sys.stderr
+        )
     return changed
 
 
