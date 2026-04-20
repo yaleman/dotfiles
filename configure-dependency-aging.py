@@ -43,6 +43,38 @@ def configure_uv(config_file: Path) -> bool:
     return changed
 
 
+def configure_npm(config_file: Path) -> bool:
+    changed = False
+    if create_if_not_exists(config_file):
+        changed = True
+
+    lines = config_file.read_text(encoding="utf-8").splitlines()
+    foundit = False
+    for index, line in enumerate(lines):
+        if line.replace(" ", "").lower() == "ignore-scripts=true":
+            foundit = True
+            break
+        if line.replace(" ", "").lower().startswith("ignore-scripts="):
+            lines[index] = "ignore-scripts=true"
+            foundit = True
+            changed = True
+            break
+
+    if not foundit:
+        lines.append("ignore-scripts=true")
+        changed = True
+
+    if changed:
+        config_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"Updated {config_file} with npm dependency aging configuration.", file=sys.stderr)
+    else:
+        print(
+            f"{config_file} already has the necessary configuration, no changes made.",
+            file=sys.stderr,
+        )
+    return changed
+
+
 def configure_pip(config_file: Path) -> bool:
     """based on info in https://blog.pypi.org/posts/2026-04-02-incident-report-litellm-telnyx-supply-chain-attack/"""
     changed = False
@@ -68,7 +100,8 @@ def configure_pip(config_file: Path) -> bool:
 @click.command()
 @click.option("--force-uv", is_flag=True, help="Force configure uv even if it's not installed.")
 @click.option("--force-pip", is_flag=True, help="Force configure pip even if it's not installed.")
-def cli(force_uv: bool, force_pip: bool) -> None:
+@click.option("--force-npm", is_flag=True, help="Force configure npm even if it's not installed.")
+def cli(force_uv: bool, force_pip: bool, force_npm: bool) -> None:
     if which("uv") is not None or force_uv:
         configure_uv(UV_CONFIG)
     else:
@@ -78,6 +111,11 @@ def cli(force_uv: bool, force_pip: bool) -> None:
         configure_pip(PIP_CONFIG)
     else:
         print("pip is not installed, skipping configuration.", file=sys.stderr)
+
+    if which("npm") is not None or force_npm:
+        configure_npm(Path.home() / ".npmrc")
+    else:
+        print("npm is not installed, skipping configuration.", file=sys.stderr)
 
 
 if __name__ == "__main__":
