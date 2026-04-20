@@ -43,30 +43,41 @@ def configure_uv(config_file: Path) -> bool:
     return changed
 
 
+def ensure_line(lines: list[str], key: str, value: str) -> bool:
+    changed = False
+    foundit = False
+    for index, line in enumerate(lines):
+        if line.replace(" ", "").lower() == f"{key}={value}".lower():
+            foundit = True
+            break
+        if line.replace(" ", "").lower().startswith(f"{key}=".lower()):
+            lines[index] = f"{key}={value}"
+            foundit = True
+            changed = True
+            break
+
+    if not foundit:
+        lines.append(f"{key}={value}")
+        changed = True
+
+    return changed
+
+
 def configure_npm(config_file: Path) -> bool:
     changed = False
     if create_if_not_exists(config_file):
         changed = True
 
     lines = config_file.read_text(encoding="utf-8").splitlines()
-    foundit = False
-    for index, line in enumerate(lines):
-        if line.replace(" ", "").lower() == "ignore-scripts=true":
-            foundit = True
-            break
-        if line.replace(" ", "").lower().startswith("ignore-scripts="):
-            lines[index] = "ignore-scripts=true"
-            foundit = True
-            changed = True
-            break
-
-    if not foundit:
-        lines.append("ignore-scripts=true")
+    # from https://github.com/lirantal/npm-security-best-practices
+    if ensure_line(lines, "ignore-scripts", "true"):
+        changed = True
+    if ensure_line(lines, "allow-git", "none"):
         changed = True
 
     if changed:
         config_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"Updated {config_file} with npm dependency aging configuration.", file=sys.stderr)
+        print(f"Updated {config_file} with npm configuration.", file=sys.stderr)
     else:
         print(
             f"{config_file} already has the necessary configuration, no changes made.",
