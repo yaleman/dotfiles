@@ -8,8 +8,10 @@ import click
 
 UV_CONFIG = Path.home() / ".config" / "uv" / "uv.toml"
 PIP_CONFIG = Path.home() / ".config" / "pip" / "pip.conf"
+NPM_CONFIG = Path.home() / ".npmrc"
 
-AGING_CONFIG = "P1D"  # "1 day" in RFC 3339 format
+AGING_DAYS = "1"
+AGING_CONFIG = f"P{AGING_DAYS}D"  # "x days" in RFC 3339 format
 
 
 def create_if_not_exists(config_file: Path) -> bool:
@@ -74,6 +76,8 @@ def configure_npm(config_file: Path) -> bool:
         changed = True
     if ensure_line(lines, "allow-git", "none"):
         changed = True
+    if ensure_line(lines, "min-release-age", AGING_DAYS):
+        changed = True
 
     if changed:
         config_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -103,7 +107,8 @@ def configure_pip(config_file: Path) -> bool:
         print(f"Updated {config_file} with pip dependency aging configuration. ({AGING_CONFIG=})", file=sys.stderr)
     else:
         print(
-            f"{config_file} already has the necessary configuration {AGING_CONFIG=}, no changes made.", file=sys.stderr
+            f"{config_file} already has the necessary configuration ({AGING_CONFIG=}), no changes made.",
+            file=sys.stderr,
         )
     return changed
 
@@ -124,7 +129,7 @@ def cli(force_uv: bool, force_pip: bool, force_npm: bool) -> None:
         print("pip is not installed, skipping configuration.", file=sys.stderr)
 
     if which("npm") is not None or force_npm:
-        configure_npm(Path.home() / ".npmrc")
+        configure_npm(NPM_CONFIG)
     else:
         print("npm is not installed, skipping configuration.", file=sys.stderr)
 
