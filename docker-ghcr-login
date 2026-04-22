@@ -1,0 +1,3 @@
+#!/bin/bash
+
+docker login ghcr.io --username "$USER" --password "$GITHUB_TOKEN"
