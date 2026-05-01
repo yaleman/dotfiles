@@ -13,7 +13,7 @@ find "${WIKIDIR}" -type f -name .DS_Store -ls -exec rm "{}" \;
 if [ -d "${WIKIDIR}" ]; then
 	git -C "${WIKIDIR}" fetch --all
 	if [ -f "${WIKIDIR}/cleanup_changelogs.py" ]; then
-		python "${WIKIDIR}/cleanup_changelogs.py" || exit 1
+		uv run --directory "${WIKIDIR}" python "${WIKIDIR}/cleanup_changelogs.py" || exit 1
 	else
 		echo "*** COULDN'T FIND THE CLEANUP SCRIPT AT ${WIKIDIR}/cleanup_changelogs.py"
 	fi
