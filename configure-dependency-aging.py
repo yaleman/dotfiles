@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env uv run --script
 
 import sys
 from pathlib import Path
