@@ -5,5 +5,5 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-codex --full-auto \
+codex --ask-for-approval on-request \
     "check out the PR $*, try to build/check it and and fix all errors/warnings, ensuring that the code is clean and follows best practices. Do not change any functionality or logic, only address the errors. once you're sure it works, commit and push the changes to the PR branch."

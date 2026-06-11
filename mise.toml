@@ -50,6 +50,10 @@ if [ -n "$(which poetry)" ]; then
 else
     echo -e "${BOLD}Poetry not installed, skipping poetry cache cleanup${RESET}"
 fi
+if [ -d "$HOME/Library/Caches/pypoetry" ]; then
+    echo -e "${BOLD}Removing poetry cache directory${RESET}"
+    rm -rf "$HOME/Library/Caches/pypoetry"
+fi
 '''
 
 
