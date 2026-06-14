@@ -92,6 +92,9 @@ def main(dependabot_path: Path) -> None:
     if changed:
         write_config(dependabot_path, config)
         click.echo(f"Updated {dependabot_path} with ecosystem-based groups.", err=True)
+        click.echo(
+            "Suggested commit message: git commit -am 'Add ecosystem-based groups to Dependabot config.'", err=True
+        )
     else:
         click.echo(f"{dependabot_path} already has ecosystem-based groups.", err=True)
 
