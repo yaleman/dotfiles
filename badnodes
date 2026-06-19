@@ -1,0 +1,3 @@
+#!/bin/bash
+
+kubectl get nodes --output wide -A | rg -v '\s+(Ready|NAMESPACE|VERSION)\s+'
