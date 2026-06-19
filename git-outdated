@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+git fetch --quiet
+
+if ! upstream=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null); then
+    echo "Current branch has no upstream configured" >&2
+    exit 2
+fi
+
+behind=$(git rev-list --count "HEAD..$upstream")
+
+if (( behind > 0 )); then
+    echo "Local repository is missing $behind remote commit(s)"
+    exit 1
+fi
+
+echo "Local repository contains all remote commits"
+exit 0
