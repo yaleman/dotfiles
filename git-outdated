@@ -1,20 +1,46 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
+# checks if the local repository is behind or ahead of the remote repository, exits with different codes based on results
 
 set -euo pipefail
 
+debugit() {
+    if [ -n "$DEBUG" ]; then
+        echo "$(date +%H:%M:%S) DEBUG: $*"
+    fi
+}
+
+debugit "Fetching remote..."
 git fetch --quiet
 
+
+debugit "Finding upstream..."
 if ! upstream=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null); then
     echo "Current branch has no upstream configured" >&2
     exit 2
 fi
 
+debugit "Doing behind..."
 behind=$(git rev-list --count "HEAD..$upstream")
 
+debugit "Doing ahead..."
+ahead=$(git rev-list --count "$upstream..HEAD")
+
+debugit "upstream=$upstream behind=$behind ahead=$ahead"
+
+exitcode=0
 if (( behind > 0 )); then
     echo "Local repository is missing $behind remote commit(s)"
-    exit 1
+    exitcode=1
 fi
+
+if (( ahead > 0 )); then
+    echo "Local repository has $ahead commit(s) that are not in the remote"
+    exitcode=$((exitcode+2))
+fi
+
+# exit is later to capture both behind and ahead status, so we can report both if needed
+if (( exitcode > 0 )); then exit $exitcode; fi
 
 echo "Local repository contains all remote commits"
 exit 0
