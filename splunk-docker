@@ -1,12 +1,14 @@
 #!/bin/bash
 
 
-if [ -z "$1" ]; then
-  echo "Using 'latest' splunk version"
+if [ -n "$VERSION" ]; then
+    echo "Using splunk version from environment variable: $VERSION"
+elif [ -z "$1" ]; then
     VERSION="latest"
 else
     VERSION="$1"
 fi
+echo "Using ${VERSION} splunk version"
 
 ADMIN_PASSWORD="HelloWorld123"
 
