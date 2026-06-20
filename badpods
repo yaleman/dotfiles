@@ -1,3 +1,18 @@
 #!/bin/bash
 
-kubectl get pods -A | rg -v '(Running|Completed|NAMESPACE)'
+
+if [[ " $* " =~ " --watch " ]]; then
+  while true; do
+    clear
+    RES=$(badpods)
+    if [[ -n "$RES" ]]; then
+      echo "$RES"
+    else
+        echo "No bad pods found."
+        exit 0
+    fi
+    sleep 5
+  done
+else
+    kubectl get pods -A | rg -v '(Running|Completed|NAMESPACE)'
+fi

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+
+if [ ! -f pyproject.toml ]; then
+    echo "pyproject.toml not found. Please run this script from the project root."
+    exit 1
+fi
+
+if [ -f uv.lock ]; then
+    rm uv.lock
+fi
+
+uv sync --upgrade

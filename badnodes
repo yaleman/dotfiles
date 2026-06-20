@@ -1,3 +1,18 @@
 #!/bin/bash
 
-kubectl get nodes --output wide -A | rg -v '\s+(Ready|NAMESPACE|VERSION)\s+'
+if [[ " $* " =~ " --watch " ]]; then
+  while true; do
+    clear
+    RES=$(badnodes)
+    if [[ -n "$RES" ]]; then
+      echo "$RES"
+    else
+        echo "No bad nodes found."
+        exit 0
+    fi
+    sleep 5
+  done
+else
+    kubectl get nodes --output wide -A | rg -v '\s+(Ready|NAMESPACE|VERSION)\s+'
+fi
+
