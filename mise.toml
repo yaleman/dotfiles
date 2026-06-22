@@ -97,3 +97,8 @@ depends = ["shellcheck", "codespell", "python-check"]
 [tools]
 shellcheck = "latest"
 uv = "latest"
+
+[tasks.cleanup-pycache]
+run = [
+    "fd --type d __pycache__  $HOME/Projects --no-ignore --exec-batch rm -rf",
+]
