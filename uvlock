@@ -11,3 +11,10 @@ if [ -f uv.lock ]; then
 fi
 
 uv sync --upgrade
+
+if [ "$(git status --porcelain | grep -cE ' uv.lock$')" -gt 0 ]; then
+    echo "uv.lock has been updated. Adding changes to git."
+    git status --porcelain | rg grep uv.lock | awk '{print $NF}' | xargs -I {} git add {}
+else
+    echo "uv.lock is up to date."
+fi

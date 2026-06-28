@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [[ $(mise tasks | grep -c clippy) -eq 1 ]]; then
+	mise clippy
+else
+	# shellcheck disable=SC2086
+	# shellcheck disable=SC2048
+	cargo clippy --all-targets --quiet $*
+fi
