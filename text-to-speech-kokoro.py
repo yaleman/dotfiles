@@ -5,9 +5,9 @@ if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 import click
-from kokoro import KPipeline
-import soundfile as sf
-import numpy as np
+from kokoro import KPipeline  # ty: ignore[unresolved-import]
+import soundfile as sf  # ty: ignore[unresolved-import]
+import numpy as np  # ty: ignore[unresolved-import]
 
 
 @click.command()
