@@ -1,4 +1,3 @@
-tap "domt4/autoupdate", "https://github.com/DomT4/homebrew-autoupdate.git"
 tap "homebrew/cask"
 tap "homebrew/core"
 tap "kanidm/kanidm", trusted: true
@@ -616,6 +615,8 @@ cask "nextcloud"
 cask "obs"
 # Knowledge base that works on top of a local folder of plain text Markdown files
 cask "obsidian"
+# AI coding agent desktop client
+cask "opencode-desktop"
 # Open source build of Lens Kubernetes IDE
 cask "openlens"
 # Programmable solid 3D CAD modeller
