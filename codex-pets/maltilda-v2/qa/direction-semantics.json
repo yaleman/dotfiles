@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "reviewed_by": "independent_visual_qa_worker",
+  "directions": [
+    {"direction":"000","expected":"up","observed":"up","verdict":"pass","reason":"Centered muzzle lifts with pupils and nose aimed vertically upward."},
+    {"direction":"022.5","expected":"up-right","observed":"up-right","verdict":"pass","reason":"Nose shifts slightly screen-right while raised eyes retain a strong upward axis."},
+    {"direction":"045","expected":"up-right","observed":"up-right","verdict":"pass","reason":"Rightward muzzle projection increases with pupils still elevated."},
+    {"direction":"067.5","expected":"up-right","observed":"up-right","verdict":"pass","reason":"Head approaches right profile while chin and eyes remain raised."},
+    {"direction":"090","expected":"right","observed":"right","verdict":"pass","reason":"Nose and pupils sit unmistakably screen-right of head center with a level profile."},
+    {"direction":"112.5","expected":"down-right","observed":"down-right","verdict":"warning","reason":"Rightward muzzle is clear; the downward eye cue is subtle but readable in the ordered arc."},
+    {"direction":"135","expected":"down-right","observed":"down-right","verdict":"pass","reason":"Nose remains screen-right and chin and pupils lower clearly."},
+    {"direction":"157.5","expected":"down-right","observed":"down-right","verdict":"pass","reason":"Face approaches down while retaining a small rightward offset."},
+    {"direction":"180","expected":"down","observed":"down","verdict":"pass","reason":"Forehead dominates as centered eyes and nose point unmistakably downward."},
+    {"direction":"202.5","expected":"down-left","observed":"down-left","verdict":"pass","reason":"Lowered face shifts screen-left with the nose left of head center."},
+    {"direction":"225","expected":"down-left","observed":"down-left","verdict":"pass","reason":"Leftward muzzle projection and lowered eyes clearly carry both axes."},
+    {"direction":"247.5","expected":"down-left","observed":"down-left","verdict":"warning","reason":"Screen-left profile is clear; the downward component is subtle but continuous from 225."},
+    {"direction":"270","expected":"left","observed":"left","verdict":"pass","reason":"Nose and pupils sit unmistakably screen-left of head center in a level profile."},
+    {"direction":"292.5","expected":"up-left","observed":"up-left","verdict":"warning","reason":"Labeled context shows nose left of head center and raised eyes despite blind horizontal disagreement."},
+    {"direction":"315","expected":"up-left","observed":"up-left","verdict":"warning","reason":"Nose remains screen-left and chin and pupils rise coherently despite blind horizontal disagreement."},
+    {"direction":"337.5","expected":"up-left","observed":"up-left","verdict":"pass","reason":"Face is nearly vertical-up with a residual screen-left nose offset and flows naturally into 000."}
+  ]
+}

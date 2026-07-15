@@ -13,3 +13,4 @@ build/
 
 *.pyc
 *.wav
+.codex-work/
