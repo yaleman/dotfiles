@@ -22,4 +22,4 @@ echo "Starting opencode with this prompt:"
 echo "$PROMPT"
 echo "-----------------------------------------"
 # shellcheck disable=SC2086
-opencode run --thinking --title "fixing $1" --print-logs $EXTRA_ARGS "$PROMPT"
+opencode run --title "fixing $1" --print-logs $EXTRA_ARGS "$PROMPT"
