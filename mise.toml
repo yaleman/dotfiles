@@ -84,7 +84,11 @@ run = "uv run --all-groups --all-extras pytest"
 depends = ["python-ty", "python-ruff", "python-test"]
 
 [tasks.shellcheck]
-run = '''find . -type f -not -path './.git/*' -exec file "{}" \; | grep 'shell script' | awk -F':' '{print $1}' | xargs shellcheck'''
+run = '''find . -type f \
+    -not -path './.git/*' \
+    -not -path './.venv/*' \
+    -exec file --no-pad --no-buffer "{}" + | \
+    grep 'shell script' | awk -F':' '{print $1}' | xargs shellcheck'''
 
 [tasks.codespell]
 run = "uvx codespell"
