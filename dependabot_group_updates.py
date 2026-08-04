@@ -6,11 +6,12 @@
 # ///
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import click
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 DEFAULT_DEPENDABOT_PATH = Path(".github/dependabot.yml")
 DEFAULT_GROUP_PATTERNS = ["*"]
@@ -95,6 +96,9 @@ def main(dependabot_path: Path) -> None:
         click.echo(
             "Suggested commit message: git commit -am 'Add ecosystem-based groups to Dependabot config.'", err=True
         )
+        if click.confirm("Do you want to commit the changes now?", abort=True):
+            subprocess.run(["git", "add", str(dependabot_path)], check=True)
+            subprocess.run(["git", "commit", "-m", "Add ecosystem-based groups to Dependabot config."], check=True)
     else:
         click.echo(f"{dependabot_path} already has ecosystem-based groups.", err=True)
 
