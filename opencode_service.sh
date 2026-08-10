@@ -11,7 +11,7 @@ LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 PLIST_DST="$LAUNCH_AGENTS_DIR/$LABEL.plist"
 
 usage() {
-    echo "Usage: $0 [--install|--stop|--status|--restart]"
+    echo "Usage: $0 [--install|--stop|--status|--restart|--uninstall]"
 }
 
 status() {
@@ -59,6 +59,25 @@ install() {
     echo "Done."
 }
 
+uninstall() {
+    echo "Uninstalling $APPNAME service..."
+
+    stop
+
+    echo "Disabling $APPNAME service..."
+    launchctl disable "$DOMAIN/$LABEL" 2>/dev/null || true
+
+    if [ -L "$PLIST_DST" ] || [ -e "$PLIST_DST" ]; then
+        echo "Removing $PLIST_DST..."
+        rm "$PLIST_DST"
+        echo "Removed."
+    else
+        echo "No plist found at $PLIST_DST; nothing to remove."
+    fi
+
+    echo "Done."
+}
+
 case "${1:---install}" in
     --install)
         install
@@ -72,6 +91,9 @@ case "${1:---install}" in
         ;;
     --status)
         status
+        ;;
+    --uninstall)
+        uninstall
         ;;
     --help|-h)
         usage
