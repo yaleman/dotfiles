@@ -106,3 +106,5 @@ uv = "latest"
 run = [
     "fd --type d __pycache__  $HOME/Projects --no-ignore --exec-batch rm -rf",
 ]
+[tasks.cleanup-swift]
+run = ["cleanup-xcode.sh $HOME/Projects"]
