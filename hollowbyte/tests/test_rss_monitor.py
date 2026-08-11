@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 
 from hollowbyte_monitor.rss_monitor import (
+    MemorySample,
+    MonitorConfig,
     MonitorError,
     MonitorErrorKind,
     ProcessMemory,
@@ -14,6 +17,7 @@ from hollowbyte_monitor.rss_monitor import (
     aggregate_process_memory,
     build_parser,
     config_from_args,
+    monitor,
     parse_proc_status,
     resolve_port_pids,
     resolve_service_pids,
@@ -133,3 +137,43 @@ def test_cli_rejects_non_finite_interval() -> None:
 
     with pytest.raises(SystemExit):
         parser.parse_args(["--port", "443", "--interval", "nan"])
+
+
+def test_monitor_prints_only_when_memory_changes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    unchanged = MemorySample(pids=(42,), vmrss_kib=100, vmhwm_kib=120, rssanon_kib=80)
+    changed = MemorySample(pids=(42,), vmrss_kib=110, vmhwm_kib=120, rssanon_kib=90)
+    samples = iter((unchanged, unchanged, changed))
+
+    def resolve_target(_: TargetSelector) -> tuple[int, ...]:
+        return (42,)
+
+    def sample_processes(_: Sequence[int]) -> MemorySample:
+        return next(samples)
+
+    def skip_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.resolve_target", resolve_target)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.sample_processes", sample_processes)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.time.sleep", skip_sleep)
+
+    output_path = tmp_path / "rss.tsv"
+    monitor(
+        MonitorConfig(
+            selector=TargetSelector(SelectorKind.SERVICE, "proxy.service"),
+            interval_seconds=0.1,
+            refresh_seconds=60.0,
+            output_path=output_path,
+            sample_limit=3,
+        )
+    )
+
+    output_lines = capsys.readouterr().out.splitlines()
+    assert len(output_lines) == 2
+    assert "RSS=100 KiB" in output_lines[0]
+    assert "RSS=110 KiB" in output_lines[1]
+    assert len(output_path.read_text(encoding="utf-8").splitlines()) == 3

@@ -296,10 +296,10 @@ def monitor(config: MonitorConfig) -> None:
     output = _open_output(config.output_path)
     pids: tuple[int, ...] = ()
     baseline: MemorySample | None = None
+    previous_sample: MemorySample | None = None
     observed_peak_kib = 0
     completed_samples = 0
     next_refresh = 0.0
-    interactive = sys.stdout.isatty()
 
     try:
         while config.sample_limit is None or completed_samples < config.sample_limit:
@@ -308,8 +308,6 @@ def monitor(config: MonitorConfig) -> None:
                 resolved = resolve_target(config.selector)
                 next_refresh = now + config.refresh_seconds
                 if resolved != pids:
-                    if interactive and completed_samples:
-                        print()
                     print(
                         f"Monitoring {config.selector.description}; PIDs changed from "
                         f"{pids or 'none'} to {resolved}; baseline reset.",
@@ -317,6 +315,7 @@ def monitor(config: MonitorConfig) -> None:
                     )
                     pids = resolved
                     baseline = None
+                    previous_sample = None
                     observed_peak_kib = 0
 
             try:
@@ -326,25 +325,22 @@ def monitor(config: MonitorConfig) -> None:
                     raise
                 pids = ()
                 baseline = None
+                previous_sample = None
                 continue
 
             if baseline is None:
                 baseline = sample
             observed_peak_kib = max(observed_peak_kib, sample.vmrss_kib)
-            line = render_sample(config.selector, sample, baseline, observed_peak_kib)
-            if interactive:
-                print(f"\r\033[2K{line}", end="", flush=True)
-            else:
-                print(line, flush=True)
-            if output is not None:
-                _write_tsv(output, sample, baseline)
+            if sample != previous_sample:
+                print(render_sample(config.selector, sample, baseline, observed_peak_kib), flush=True)
+                if output is not None:
+                    _write_tsv(output, sample, baseline)
+                previous_sample = sample
 
             completed_samples += 1
             if config.sample_limit is None or completed_samples < config.sample_limit:
                 time.sleep(config.interval_seconds)
     finally:
-        if interactive and completed_samples:
-            print()
         if output is not None:
             output.close()
 

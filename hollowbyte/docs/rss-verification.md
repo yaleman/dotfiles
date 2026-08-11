@@ -48,11 +48,13 @@ for heap allocation.
 
 The live monitor resolves the PID again every two seconds, resets its baseline
 when the process set changes, and shows current RSS, change from baseline,
-anonymous RSS, observed peak, and kernel high-water mark. Select a systemd
-service by name:
+anonymous RSS, observed peak, and kernel high-water mark. It prints the initial
+sample and then a new line only when one of those values or the PID set changes;
+timestamps alone do not produce output. Select a systemd service by name:
 
 ```console
-./monitor_rss.py --service kanidm.service --output rss-samples.tsv
+ uvx --no-cache --from 'git+https://github.com/yaleman/dotfiles.git#subdirectory=hollowbyte' \
+  hollowbyte-monitor --service apache2.service
 ```
 
 Service mode monitors systemd's `MainPID`. If the service delegates TLS to
@@ -60,17 +62,28 @@ worker processes, use port mode so every PID reported as owning the listener is
 aggregated:
 
 ```console
-sudo ./monitor_rss.py --port 443 --output rss-samples.tsv
+sudo uvx --no-cache --from 'git+https://github.com/yaleman/dotfiles.git#subdirectory=hollowbyte' \
+  hollowbyte-monitor --service apache2.service --output rss-samples.tsv
 ```
 
 Port mode normally requires root for `ss` to disclose process IDs. Omit
-`--output` if a TSV recording is not required. Press Ctrl-C to stop, or use
-`--samples NUMBER` for a bounded run. Sampling defaults to 100 milliseconds and
-can be changed with `--interval SECONDS`.
+`--output` if a TSV recording is not required. The TSV also records changes
+only. Press Ctrl-C to stop, or use `--samples NUMBER` for a bounded run. Sampling
+defaults to 100 milliseconds and can be changed with `--interval SECONDS`.
 
 The script is Linux-only, uses procfs, and has no runtime dependencies outside
-the Python standard library. Run it from the project directory or copy both
-`monitor_rss.py` and `rss_monitor.py` to the TLS host.
+the Python standard library. You can run it with uvx:
+
+```shell
+ uvx --no-cache --from 'git+https://github.com/yaleman/dotfiles.git#subdirectory=hollowbyte' \
+  hollowbyte-monitor <extras>
+```
+
+or probably install with pip:
+
+```shell
+pip install 'git+https://github.com/yaleman/dotfiles.git#subdirectory=hollowbyte'
+```
 
 If Python is unavailable, run this shell sampler on the server and substitute
 the PID:
