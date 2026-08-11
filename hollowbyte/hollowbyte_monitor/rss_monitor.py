@@ -47,6 +47,14 @@ class SelectorKind(Enum):
     PORT = "port"
 
 
+class LookupStatus(Enum):
+    """Result state for non-essential linked-library inspection."""
+
+    FOUND = "found"
+    NOT_FOUND = "not-found"
+    UNAVAILABLE = "unavailable"
+
+
 @dataclass(frozen=True)
 class TargetSelector:
     """A systemd service or TCP listening port selector."""
@@ -90,9 +98,19 @@ class MonitorConfig:
     sample_limit: int | None
 
 
+@dataclass(frozen=True)
+class LookupResult:
+    """A value discovered by an optional host inspection command."""
+
+    status: LookupStatus
+    value: str | None = None
+
+
 CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 
 _PID_PATTERN = re.compile(r"\bpid=(\d+)\b")
+_LIBRARY_NAME_PATTERN = re.compile(r"^lib(?:ssl|crypto)\.so(?:\..+)?$")
+_OPENSSL_VERSION_PATTERN = re.compile(r"^OpenSSL\s+.+$")
 _STATUS_FIELDS = {
     "VmRSS": "vmrss_kib",
     "VmHWM": "vmhwm_kib",
@@ -241,6 +259,128 @@ def sample_processes(pids: Sequence[int], proc_root: Path = Path("/proc")) -> Me
     return aggregate_process_memory([read_process_memory(pid, proc_root) for pid in pids])
 
 
+def read_loaded_library_paths(pid: int, proc_root: Path = Path("/proc")) -> tuple[Path, ...]:
+    """Read libssl and libcrypto paths actually mapped by a process."""
+
+    maps_path = proc_root / str(pid) / "maps"
+    try:
+        contents = maps_path.read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise MonitorError(MonitorErrorKind.PROCESS_GONE, f"PID {pid} exited") from error
+    except PermissionError as error:
+        raise MonitorError(
+            MonitorErrorKind.PID_UNAVAILABLE,
+            f"permission denied reading {maps_path}",
+        ) from error
+    except OSError as error:
+        raise MonitorError(
+            MonitorErrorKind.PID_UNAVAILABLE,
+            f"could not read {maps_path}: {error}",
+        ) from error
+
+    paths: set[Path] = set()
+    for line in contents.splitlines():
+        fields = line.split(maxsplit=5)
+        if len(fields) != 6:
+            continue
+        mapped_path = fields[5].removesuffix(" (deleted)")
+        if mapped_path.startswith("/") and _LIBRARY_NAME_PATTERN.match(Path(mapped_path).name):
+            paths.add(Path(mapped_path))
+    return tuple(sorted(paths))
+
+
+def _run_optional(command: Sequence[str], runner: CommandRunner) -> LookupResult:
+    """Run an optional command without converting an unavailable tool into a monitor failure."""
+
+    try:
+        result = runner(command)
+    except MonitorError as error:
+        if error.kind is MonitorErrorKind.COMMAND_NOT_FOUND:
+            return LookupResult(LookupStatus.UNAVAILABLE)
+        return LookupResult(LookupStatus.UNAVAILABLE)
+    if result.returncode != 0:
+        return LookupResult(LookupStatus.NOT_FOUND)
+    return LookupResult(LookupStatus.FOUND, result.stdout)
+
+
+def find_openssl_version(library_path: Path, runner: CommandRunner = run_command) -> LookupResult:
+    """Extract the OpenSSL banner embedded in a loaded library, when available."""
+
+    output = _run_optional(("strings", "-a", str(library_path)), runner)
+    if output.status is not LookupStatus.FOUND or output.value is None:
+        return output
+    for line in output.value.splitlines():
+        if _OPENSSL_VERSION_PATTERN.match(line):
+            return LookupResult(LookupStatus.FOUND, line)
+    return LookupResult(LookupStatus.NOT_FOUND)
+
+
+def find_package_version(library_path: Path, runner: CommandRunner = run_command) -> LookupResult:
+    """Find the owning Debian or RPM package for a mapped library path."""
+
+    package_tools_available = False
+    dpkg_owner = _run_optional(("dpkg-query", "-S", "--", str(library_path)), runner)
+    if dpkg_owner.status is not LookupStatus.UNAVAILABLE:
+        package_tools_available = True
+        if dpkg_owner.status is LookupStatus.FOUND and dpkg_owner.value is not None:
+            package_name, separator, _ = dpkg_owner.value.strip().partition(": ")
+            if separator:
+                version = _run_optional(
+                    ("dpkg-query", "-W", "-f=${Package} ${Version}\\n", package_name),
+                    runner,
+                )
+                if version.status is LookupStatus.FOUND and version.value is not None:
+                    return LookupResult(LookupStatus.FOUND, version.value.strip())
+                return LookupResult(LookupStatus.FOUND, package_name)
+
+    rpm_package = _run_optional(
+        ("rpm", "-qf", "--qf", "%{NAME} %{VERSION}-%{RELEASE}\\n", str(library_path)),
+        runner,
+    )
+    if rpm_package.status is not LookupStatus.UNAVAILABLE:
+        package_tools_available = True
+        if rpm_package.status is LookupStatus.FOUND and rpm_package.value is not None:
+            return LookupResult(LookupStatus.FOUND, rpm_package.value.strip())
+
+    if package_tools_available:
+        return LookupResult(LookupStatus.NOT_FOUND)
+    return LookupResult(LookupStatus.UNAVAILABLE)
+
+
+def report_linked_libraries(
+    pids: Sequence[int],
+    proc_root: Path = Path("/proc"),
+    runner: CommandRunner = run_command,
+    output: IO[str] | None = None,
+) -> None:
+    """Print non-fatal OpenSSL linked-library diagnostics for the current PID set."""
+
+    stream = output if output is not None else sys.stderr
+    libraries: list[tuple[int, Path]] = []
+    for pid in pids:
+        try:
+            mapped_paths = read_loaded_library_paths(pid, proc_root)
+        except MonitorError as error:
+            print(f"Linked libraries for PID {pid}: unavailable ({error.kind.value})", file=stream)
+            continue
+        libraries.extend((pid, path) for path in mapped_paths)
+
+    if not libraries:
+        print("Linked OpenSSL libraries: none found or inaccessible", file=stream)
+        return
+
+    for pid, library_path in libraries:
+        process_path = proc_root / str(pid) / "root" / library_path.relative_to("/")
+        version = find_openssl_version(process_path, runner)
+        package = find_package_version(library_path, runner)
+        version_text = version.value if version.status is LookupStatus.FOUND else version.status.value
+        package_text = package.value if package.status is LookupStatus.FOUND else package.status.value
+        print(
+            f"Linked library PID {pid}: {library_path}; OpenSSL={version_text}; package={package_text}",
+            file=stream,
+        )
+
+
 def format_kib(value: int, *, signed: bool = False) -> str:
     """Format KiB as a compact human-readable value."""
 
@@ -316,6 +456,7 @@ def monitor(config: MonitorConfig) -> None:
                     baseline = None
                     previous_sample = None
                     observed_peak_kib = 0
+                    report_linked_libraries(pids)
 
             try:
                 sample = sample_processes(pids)

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Sequence
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
 from hollowbyte_monitor.rss_monitor import (
+    LookupStatus,
     MemorySample,
     MonitorConfig,
     MonitorError,
@@ -17,8 +19,11 @@ from hollowbyte_monitor.rss_monitor import (
     aggregate_process_memory,
     build_parser,
     config_from_args,
+    find_openssl_version,
+    find_package_version,
     monitor,
     parse_proc_status,
+    report_linked_libraries,
     resolve_port_pids,
     resolve_service_pids,
 )
@@ -137,6 +142,39 @@ def test_cli_rejects_non_finite_interval() -> None:
 
     with pytest.raises(SystemExit):
         parser.parse_args(["--port", "443", "--interval", "nan"])
+
+
+def test_linked_library_report_includes_openssl_and_dpkg_version(tmp_path: Path) -> None:
+    proc_root = tmp_path / "proc"
+    maps_path = proc_root / "42" / "maps"
+    maps_path.parent.mkdir(parents=True)
+    maps_path.write_text(
+        "7f000000-7f001000 r--p 00000000 00:00 1 /usr/lib/libcrypto.so.3\n",
+        encoding="utf-8",
+    )
+    stream = StringIO()
+
+    def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        if command[0] == "strings":
+            return completed(command, stdout="OpenSSL 3.0.20 1 Jul 2026\n")
+        if command[0] == "dpkg-query" and command[1] == "-S":
+            return completed(command, stdout="libssl3:amd64: /usr/lib/libcrypto.so.3\n")
+        if command[0] == "dpkg-query" and command[1] == "-W":
+            return completed(command, stdout="libssl3:amd64 3.0.20-1\n")
+        return completed(command, returncode=1)
+
+    report_linked_libraries((42,), proc_root, runner, stream)
+
+    assert "OpenSSL=OpenSSL 3.0.20 1 Jul 2026" in stream.getvalue()
+    assert "package=libssl3:amd64 3.0.20-1" in stream.getvalue()
+
+
+def test_openssl_and_package_lookups_report_unavailable_tools() -> None:
+    def unavailable(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        raise MonitorError(MonitorErrorKind.COMMAND_NOT_FOUND, f"required command not found: {command[0]}")
+
+    assert find_openssl_version(Path("/usr/lib/libssl.so.3"), unavailable).status is LookupStatus.UNAVAILABLE
+    assert find_package_version(Path("/usr/lib/libssl.so.3"), unavailable).status is LookupStatus.UNAVAILABLE
 
 
 def test_monitor_prints_only_when_memory_changes(

@@ -52,6 +52,9 @@ anonymous RSS, observed peak, and kernel high-water mark. It prints the initial
 sample and then a new line only when one of those values or the PID set changes;
 timestamps alone do not produce output. PIDs appear in a separate notification
 only when the process set changes, while TSV records retain the PID column.
+At startup and whenever the PID set changes, it also reports mapped `libssl` or
+`libcrypto` libraries, their embedded OpenSSL banner from `strings`, and the
+owning Debian or RPM package version when the relevant tools are available.
 Select a systemd service by name:
 
 ```console
