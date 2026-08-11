@@ -3,8 +3,9 @@
 import sys
 from pathlib import Path
 from shutil import which
-import tomlkit
+
 import click
+import tomlkit
 
 UV_CONFIG = Path.home() / ".config" / "uv" / "uv.toml"
 PIP_CONFIG = Path.home() / ".config" / "pip" / "pip.conf"

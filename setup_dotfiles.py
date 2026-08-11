@@ -1,10 +1,11 @@
 #!python3
 import argparse
 import json
-import os.path
 import os
-from pathlib import Path
+import os.path
 import sys
+from pathlib import Path
+
 from pydantic.dataclasses import dataclass
 
 
@@ -17,9 +18,10 @@ class ConfigFile:
     @classmethod
     def load_file(cls, filepath: Path) -> "ConfigFile":
         valid_keys = ("one_to_one", "public_maps", "private_maps")
-        data = json.loads(open(filepath, "r", encoding="utf-8").read())
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
         failed_validation = False
-        for key in data.keys():
+        for key in data:
             if key not in valid_keys:
                 print(f"Found invalid key in config: {key}")
                 failed_validation = True

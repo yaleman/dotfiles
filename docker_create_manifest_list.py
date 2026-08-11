@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # This takes the REGISTRY_IMAGE env ( echo "REGISTRY_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV} as the first argument - a string indicating the image name in the registry
 # and the DOCKER_METADATA_OUTPUT_JSON env ( output of docker/metadata-action ) as the second argument - a JSON string containing tags
 # and creates a docker manifest list using docker buildx imagetools create
@@ -12,8 +10,8 @@
 
 import json
 import os
-import sys
 import subprocess
+import sys
 
 registry_image = sys.argv[1]
 docker_metadata_output_json = sys.argv[2]
@@ -58,6 +56,6 @@ except subprocess.CalledProcessError as e:
         file=sys.stderr,
     )
     sys.exit(1)
-except Exception as e:
+except Exception as e:  # noqa: BLE001
     print(f"Exception running docker buildx imagetools create: {e}", file=sys.stderr)
     sys.exit(1)

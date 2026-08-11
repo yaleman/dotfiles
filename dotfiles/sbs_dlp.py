@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from hashlib import sha256
 import json
-from pathlib import Path
 import subprocess
 import sys
+from dataclasses import asdict, dataclass
+from hashlib import sha256
+from pathlib import Path
 from typing import Any
 
 import click
-from loguru import logger
 import requests
+from loguru import logger
 
 JSON_PREFIX = '.streamController.enqueue("'
 JSON_SUFFIX = '\\n");</script>'
@@ -79,7 +79,7 @@ def extract_json(input_text: str) -> list[Any]:
         logger.debug(payload_text)
         raise ValueError("Failed to parse JSON from input text") from error
     if not isinstance(payload, list):
-        raise ValueError("Expected the SBS payload to decode to a list")
+        raise TypeError("Expected the SBS payload to decode to a list")
     return payload
 
 

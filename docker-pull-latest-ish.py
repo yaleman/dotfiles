@@ -2,19 +2,19 @@
 
 
 import json
-from typing import Optional, Dict
-from pathlib import Path
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+
+import click
 import docker
 import docker.errors
-import click
 
 HOMEDIR = os.path.expanduser("~/.cache/docker-pull-latest-ish")
 CACHE_PATH = Path(os.path.join(HOMEDIR, "cache.json"))
 
-CacheType = Dict[str, float]
+CacheType = dict[str, float]
 
 
 class Cache:
@@ -37,13 +37,13 @@ class Cache:
         with open(CACHE_PATH, "w") as f:
             json.dump(self.cache, f)
 
-    def get(self, container_name: str) -> Optional[float]:
+    def get(self, container_name: str) -> float | None:
         res = self.cache.get(container_name)
         if not isinstance(res, (float, int)):
             return None
         return float(res)
 
-    def set(self, container_name: str, created_time: float | int) -> None:
+    def set(self, container_name: str, created_time: float) -> None:
         self.cache[container_name] = float(created_time)
         self.changed = True
 
@@ -66,7 +66,7 @@ def pull_latest_ish(container_name: str, days: int) -> None:
         return
 
     created_time = created_time.rstrip("Z").split(".")[0] + "Z"
-    created_dt = datetime.strptime(created_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    created_dt = datetime.strptime(created_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
     cache = Cache()
     cached_created_time = cache.get(container_name)
@@ -76,7 +76,7 @@ def pull_latest_ish(container_name: str, days: int) -> None:
             return
     else:
         cache.set(container_name, created_dt.timestamp())
-    now_dt = datetime.now(timezone.utc)
+    now_dt = datetime.now(UTC)
     age_days = (now_dt - created_dt).days
 
     if age_days > days:

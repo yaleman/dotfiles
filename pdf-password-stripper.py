@@ -1,11 +1,11 @@
 #!python
 
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from PyPDF2 import PdfReader, PasswordType, PdfWriter
 import click
+from PyPDF2 import PasswordType, PdfReader, PdfWriter
 
 
 @click.command()
@@ -20,7 +20,7 @@ def main(filename: str, password: str) -> None:
             print("The password failed!")
             sys.exit(1)
         print("Password worked!")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"An error occurred: {e}")
         sys.exit(1)
     # write the file to disk

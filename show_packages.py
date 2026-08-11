@@ -1,16 +1,16 @@
 #!/usr/bin/python3
 
-from dataclasses import dataclass
-
 import json
 import logging
-from optparse import OptionParser, Values
 import os
 import re
-from shutil import which
 import subprocess
 import sys
-from typing import Dict, Optional
+from dataclasses import dataclass
+from optparse import OptionParser, Values
+from shutil import which
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PackageState:
@@ -85,16 +85,16 @@ class PackageState:
 @dataclass
 class Package:
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
-    version: Optional[str] = None
-    update_version: Optional[str] = None
-    update_repo: Optional[str] = None
+    version: str | None = None
+    update_version: str | None = None
+    update_repo: str | None = None
 
-    arch: Optional[str] = None
+    arch: str | None = None
     state: str = "unknown"
 
-    def dict_without_nulls(self) -> Dict[str, str]:
+    def dict_without_nulls(self) -> dict[str, str]:
         """return a dict without null values"""
         return {key: value for key, value in self.__dict__.items() if value is not None and value != ""}
 
@@ -105,27 +105,27 @@ def try_zypper(options: Values) -> bool:
     if zypper is None:
         return False
 
-    logging.debug("zypper is available")
+    LOGGER.debug("zypper is available")
     # TODO: update this to use zypper search -i -v and parse because you don't get version etc from the base search
     # run 'zypper search -i' and collect the output
 
     cmd = [zypper, "search", "-i"]
     try:
-        output = output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
+        output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         return False
-    except Exception as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+    except Exception as error:  # noqa: BLE001
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         return False
     # this parses the default line response
     zypper_parser = re.compile(r"^(?P<state>\S+)\s+\|\s+(?P<name>\S+)\s+\|\s+(?P<description>[^\|]+)")
-    results: Dict[str, Package] = {}
+    results: dict[str, Package] = {}
 
     for line in output.stdout.splitlines():
         parsed = zypper_parser.search(line.strip())
         if parsed is None:
-            logging.debug(f"Skipping line: {line}")
+            LOGGER.debug(f"Skipping line: {line}")
             continue
 
         package = Package(
@@ -139,23 +139,23 @@ def try_zypper(options: Values) -> bool:
     cmd = ["zypper", "list-updates"]
     update_check_failed = False
     try:
-        output = output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
+        output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         update_check_failed = True
         # this parses the default line response
-    except Exception as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+    except Exception as error:  # noqa: BLE001
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         update_check_failed = True
 
     if not update_check_failed:
         update_parser = re.compile(
             r"^\w+\s+\|\s+(?P<repo_name>[^|]+)\s+\|\s+(?P<name>\S+)\s+\|\s+(?P<version>\S+)\s+\|\s+(?P<version_update>\S+)\s+\|\s+(?P<arch>\S+)"
-        )  # noqa: E501
+        )
         for line in output.stdout.splitlines():
             parsed = update_parser.search(line.strip())
             if parsed is None:
-                logging.debug(f"Skipping line: {line}")
+                LOGGER.debug(f"Skipping line: {line}")
                 continue
             package_name = parsed.group("name")
             if package_name in results:
@@ -163,7 +163,7 @@ def try_zypper(options: Values) -> bool:
             else:
                 package = Package(name=package_name)
             if package.version is not None and package.version != parsed.group("version"):
-                logging.warning(
+                LOGGER.warning(
                     "Version mismatch for: %s installed: %s update says we have %s",
                     package_name,
                     package.version,
@@ -186,26 +186,26 @@ def try_dpkg(options: Values) -> bool:
     if which("dpkg") is None:
         return False
 
-    logging.debug("dpkg is available")
+    LOGGER.debug("dpkg is available")
     cmd = ["dpkg", "-l"]
     try:
         first_output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         return False
-    except Exception as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+    except Exception as error:  # noqa: BLE001
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         return False
     # this parses the default line response
     dpkg_parser = re.compile(
         r"^(?P<state>\S+)\s+(?P<name>\S+)\s+(?P<version>\S+)\s+(?P<arch>\S+)\s+(?P<description>.*)"
     )
-    results: Dict[str, Package] = {}
+    results: dict[str, Package] = {}
 
     for line in first_output.stdout.splitlines():
         parsed = dpkg_parser.search(line.strip())
         if parsed is None:
-            logging.debug(f"Skipping line: {line}")
+            LOGGER.debug(f"Skipping line: {line}")
             continue
 
         if parsed.group("name") == "Name" and parsed.group("version") == "Version":
@@ -219,7 +219,7 @@ def try_dpkg(options: Values) -> bool:
             state=PackageState.from_dpkg(parsed.group("state")),
         )
         if package.state == PackageState.UNKNOWN:
-            logging.warning(
+            LOGGER.warning(
                 'Unknown state for package: %s line="%s"',
                 json.dumps(package.__dict__),
                 line,
@@ -230,16 +230,16 @@ def try_dpkg(options: Values) -> bool:
     try:
         update_output = subprocess.run(cmd, capture_output=True, check=True, encoding="utf-8")
     except subprocess.CalledProcessError as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         failed = True
-    except Exception as error:
-        logging.error("Failed to run %s: %s", " ".join(cmd), error)
+    except Exception as error:  # noqa: BLE001
+        LOGGER.error("Failed to run %s: %s", " ".join(cmd), error)
         failed = True
     if not failed:
         # util-linux-locales/oldoldstable 2.33.1-0.1+deb10u1 all [upgradable from: 2.33.1-0.1]
         update_parser = re.compile(
             r"^(?P<name>[^\/]+)\/\S+\s+(?P<update_version>[^ ]+) (?P<arch>\S+)\s+ \[upgradable from: (?P<version>[^ ]+)"
-        )  # noqa: E501
+        )
         for line in update_output.stdout.splitlines():
             parsed = update_parser.search(line.strip())
             if parsed is not None:

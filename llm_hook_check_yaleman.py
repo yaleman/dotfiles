@@ -4,16 +4,16 @@
 
 import json
 import sys
-from typing import Optional, Any, Dict, Literal
-from pydantic import BaseModel, Field, field_validator
+from typing import Any, Literal
 
+from pydantic import BaseModel, Field, field_validator
 
 ALLOWED_HOOK_SPECIFIC_OUTPUT_EVENT_NAMES = {"PostToolUse", "UserPromptSubmit"}
 
 
 class HookSpecificOutput(BaseModel):
     hook_event_name: str = Field(serialization_alias="hookEventName")
-    additional_context: Optional[str] = Field(serialization_alias="additionalContext", default=None)
+    additional_context: str | None = Field(serialization_alias="additionalContext", default=None)
 
     @field_validator("hook_event_name")
     def validate_hook_event_name(cls, v: str) -> str:
@@ -39,20 +39,20 @@ def test_hook_output_specific_output() -> None:
 
 class HookDecision(BaseModel):
     behavior: Literal["allow", "block"]
-    updated_input: Optional[Dict[str, str]] = None
-    interrupt: Optional[bool] = None
-    message: Optional[str] = None
+    updated_input: dict[str, str] | None = None
+    interrupt: bool | None = None
+    message: str | None = None
 
 
 class HookOutput(BaseModel):
     continue_: bool = Field(default=True, serialization_alias="continue")
-    hook_specific_output: Dict[str, Any] = Field(serialization_alias="hookSpecificOutput", default_factory=dict)
-    updated_input: Optional[Dict[str, str]] = Field(serialization_alias="updatedInput", default=None)
-    system_message: Optional[str] = Field(serialization_alias="systemMessage", default=None)
-    decision: Optional[HookDecision] = None
+    hook_specific_output: dict[str, Any] = Field(serialization_alias="hookSpecificOutput", default_factory=dict)
+    updated_input: dict[str, str] | None = Field(serialization_alias="updatedInput", default=None)
+    system_message: str | None = Field(serialization_alias="systemMessage", default=None)
+    decision: HookDecision | None = None
 
     def block(
-        self, message: str, interrupt: Optional[bool] = None, updated_input: Optional[Dict[str, str]] = None
+        self, message: str, interrupt: bool | None = None, updated_input: dict[str, str] | None = None
     ) -> None:
         self.decision = HookDecision(
             behavior="block", message=message, interrupt=interrupt, updated_input=updated_input
@@ -74,7 +74,7 @@ class HookOutput(BaseModel):
                     del res["decision"][key]
         return json.dumps(res)
 
-    def update_inputs(self, updated_fields: Dict[str, str]) -> None:
+    def update_inputs(self, updated_fields: dict[str, str]) -> None:
         self.updated_input = updated_fields
 
 
@@ -87,7 +87,7 @@ def test_hook_output() -> None:
     assert parsed_output == {"decision": {"behavior": "block", "message": "Testing block reason"}}
 
 
-def try_parse_input(data: str) -> Optional[Dict[str, Any]]:
+def try_parse_input(data: str) -> dict[str, Any] | None:
     try:
         return json.loads(data)  # type: ignore[no-any-return]
     except json.JSONDecodeError:
@@ -104,7 +104,7 @@ def blind_check_input(data: str) -> None:
             sys.exit(2)
 
 
-def parse_json(inputdata: Dict[str, Any]) -> str:
+def parse_json(inputdata: dict[str, Any]) -> str:
     # we can do fancy JSON responses - https://code.claude.com/docs/en/hooks#advanced:-json-output
     update_fields = {}
     for field, value in inputdata.get("tool_input", {}).items():

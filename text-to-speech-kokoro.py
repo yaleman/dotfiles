@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run --script
 import os
 import sys
 
@@ -23,7 +24,9 @@ def readit(input_filename: str, output_filename: str) -> None:
     lang_code = "b"
     pipeline = KPipeline(lang_code=lang_code, repo_id="hexgrad/Kokoro-82M")
     print(f"Reading text from {input_filename}...")
-    text = open(input_filename, encoding="utf-8").read()
+    with open(input_filename, encoding="utf-8") as f:
+        text = f.read()
+
     print("Generating audio...")
     # voice files are loaded from here: https://huggingface.co/hexgrad/Kokoro-82M/tree/main/voices
     audio = np.concatenate([a for _, _, a in pipeline(text, voice=f"{lang_code}f_isabella")])

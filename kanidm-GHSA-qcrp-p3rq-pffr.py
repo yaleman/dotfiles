@@ -90,7 +90,7 @@ def receive_response(sock: socket.socket) -> bytes:
     while True:
         try:
             chunk = sock.recv(4096)
-        except socket.timeout:
+        except TimeoutError:
             break
 
         if not chunk:

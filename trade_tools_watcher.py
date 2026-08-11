@@ -8,12 +8,13 @@
 # ///
 
 import json
-from pathlib import Path
 import sys
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any
+
 import click
-from loguru import logger
 import requests
+from loguru import logger
 from pydantic import BaseModel, Field
 
 SITE_BASE = "https://www.tradetools.com"
@@ -29,7 +30,7 @@ BASE_PARAMS = {
 }
 
 
-def get_params(category_id: int = 951) -> Dict[str, Any]:
+def get_params(category_id: int = 951) -> dict[str, Any]:
     """
     Returns the base parameters for the API request.
     """
@@ -40,7 +41,7 @@ def get_params(category_id: int = 951) -> Dict[str, Any]:
     return params
 
 
-def get_headers() -> Dict[str, str]:
+def get_headers() -> dict[str, str]:
     """
     Returns the headers for the API request.
     """
@@ -57,7 +58,7 @@ def get_headers() -> Dict[str, str]:
     }
 
 
-def make_request(category_id: int = 951) -> Dict[str, Any]:
+def make_request(category_id: int = 951) -> dict[str, Any]:
     """
     Makes a request to the API and returns the response.
     """
@@ -65,11 +66,13 @@ def make_request(category_id: int = 951) -> Dict[str, Any]:
     # params = get_params(category_id)
     response = requests.get(BASE_URL, params=get_params(category_id), headers=get_headers())
 
+    response.raise_for_status()
     if response.status_code != 200:
-        raise Exception("Request failed with status code {response.status_code}")
+        # or yeet it to an exception either way
+        raise requests.RequestException(f"Request failed with status code {response.status_code}")
     logger.debug(response.request.headers)
     logger.debug(response.request.url)
-    retval: Dict[str, Any] = response.json()
+    retval: dict[str, Any] = response.json()
     return retval
 
 
@@ -84,7 +87,7 @@ class Product(BaseModel):
     path: str  # ": "https://www.tradetools.com/renegade-industrial-15-7-drawer-black-side-cabinet-ri15-7xbla/"
 
 
-def parse(response: Dict[str, Any]) -> List[Product]:
+def parse(response: dict[str, Any]) -> list[Product]:
     """
     Parses the response from the API and returns the relevant data.
     """
@@ -97,7 +100,7 @@ def parse(response: Dict[str, Any]) -> List[Product]:
     return [Product.model_validate(item) for item in response["response"]["products"]]
 
 
-def get_config() -> List[int]:
+def get_config() -> list[int]:
     CONFIG_FILE = "trade_tools_watcher.json"
     if Path(CONFIG_FILE).exists():
         return json.loads(Path(CONFIG_FILE).read_text())["categories"]  # type: ignore[no-any-return]
@@ -114,7 +117,7 @@ def get_config() -> List[int]:
     help=f"Category ID to fetch products from, defaults to {json.dumps(get_config())}",
     multiple=True,
 )
-def main(debug: bool, category: List[int]) -> None:
+def main(debug: bool, category: list[int]) -> None:
     if debug:
         logger.remove()
         logger.add(sys.stdout, level="DEBUG")
@@ -144,7 +147,7 @@ def main(debug: bool, category: List[int]) -> None:
                         SITE_BASE,
                         product.path,
                     )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"An error occurred: {e}")
 
 

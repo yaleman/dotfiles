@@ -1,18 +1,16 @@
 """find the 'git' file path for a given path"""
 
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 # import sys
-from typing import Optional
-
 import click
 
 
-def get_git_basedir() -> Optional[str]:
+def get_git_basedir() -> str | None:
     """get the base dir of the current git repo"""
-    cmd = "git rev-parse --show-toplevel".split()
+    cmd = ["git", "rev-parse", "--show-toplevel"]
     try:
         res = subprocess.check_output(cmd)
         return res.decode("utf-8").strip()

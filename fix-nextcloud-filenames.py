@@ -1,8 +1,7 @@
 #!python3
+import sys
 from functools import lru_cache
 from pathlib import Path
-import sys
-from typing import Optional, Set
 
 import click
 
@@ -36,8 +35,8 @@ BAD_CHARS = {
 }
 
 
-@lru_cache()
-def all_bad_chars() -> Set[str]:
+@lru_cache
+def all_bad_chars() -> set[str]:
     all_chars = set()
     for key, values in BAD_CHAR_MAPS.items():
         all_chars.add(key)
@@ -48,7 +47,7 @@ def all_bad_chars() -> Set[str]:
 @click.command()
 @click.argument("filepath", type=click.Path(exists=True), envvar="FIX_NEXTCLOUD_DEFAULT_PATH")
 @click.option("--debug", is_flag=True)
-def fix_nextcloud_filenames(filepath: str, debug: Optional[bool] = False) -> None:
+def fix_nextcloud_filenames(filepath: str, debug: bool | None = False) -> None:
     path = Path(filepath)
 
     if not path.exists():
@@ -58,25 +57,24 @@ def fix_nextcloud_filenames(filepath: str, debug: Optional[bool] = False) -> Non
     print(f"Checking {filepath}", file=sys.stderr)
 
     for filename in path.iterdir():
-        if filename.is_file():
-            if any(char in filename.name for char in all_bad_chars()):
-                new_name = str(filename.name)
-                for char in BAD_CHARS:
-                    new_name = new_name.replace(char, " ")
-                while "  " in new_name:
-                    new_name = new_name.replace("  ", " ")
+        if filename.is_file() and any(char in filename.name for char in all_bad_chars()):
+            new_name = str(filename.name)
+            for char in BAD_CHARS:
+                new_name = new_name.replace(char, " ")
+            while "  " in new_name:
+                new_name = new_name.replace("  ", " ")
 
-                for key, values in BAD_CHAR_MAPS.items():
-                    for value in values:
-                        new_name = new_name.replace(value, key)
+            for key, values in BAD_CHAR_MAPS.items():
+                for value in values:
+                    new_name = new_name.replace(value, key)
 
-                new_name = new_name.strip()
+            new_name = new_name.strip()
 
-                new_filepath = filename.parent / new_name
+            new_filepath = filename.parent / new_name
 
-                if new_name != filename.name:
-                    print(f"Renaming '{filename}' to '{new_filepath}'")
-                    filename.rename(new_filepath)
+            if new_name != filename.name:
+                print(f"Renaming '{filename}' to '{new_filepath}'")
+                filename.rename(new_filepath)
 
 
 if __name__ == "__main__":

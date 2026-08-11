@@ -1,14 +1,10 @@
-#!python3
-
 # sometimes your system has a UID or GID that is no longer valid, and you need to change it to a new one
 # and the find command can't deal with u64!
 
-from pathlib import Path
-import sys
-from typing import Optional, Set
-
-import os
 import argparse
+import os
+import sys
+from pathlib import Path
 
 IGNORE_ROOTS = (
     "/proc",
@@ -18,7 +14,7 @@ IGNORE_ROOTS = (
 
 
 def do_thing(
-    file_path: Path, uid: Optional[int], gid: Optional[int], new_uid: Optional[int], new_gid: Optional[int], debug: bool
+    file_path: Path, uid: int | None, gid: int | None, new_uid: int | None, new_gid: int | None, debug: bool
 ) -> None:
     if debug:
         print(f"Checking {file_path}")
@@ -44,23 +40,23 @@ def do_thing(
     except FileNotFoundError:
         if debug:
             print(f"File not found: file_path={file_path}")
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
         print(f"Error processing file_path={file_path}: error={error}")
 
 
 def find_files_by_uid_gid(
     start_path: str,
-    uid: Optional[int] = None,
-    gid: Optional[int] = None,
-    new_uid: Optional[int] = None,
-    new_gid: Optional[int] = None,
+    uid: int | None = None,
+    gid: int | None = None,
+    new_uid: int | None = None,
+    new_gid: int | None = None,
     debug: bool = False,
 ) -> None:
     if uid is None and gid is None:
         print("No UID or GID provided, exiting")
         sys.exit(1)
 
-    done_paths: Set[Path] = set()
+    done_paths: set[Path] = set()
 
     for root, _dirs, files in os.walk(start_path):
         if root in IGNORE_ROOTS or root.startswith(tuple(IGNORE_ROOTS)):

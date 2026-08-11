@@ -1,13 +1,11 @@
 """diffing strings!"""
 
 import sys
+
 import click
 
 
-from typing import Optional, Tuple
-
-
-def diff_string_suffix(string1: str, string2: str) -> Optional[Tuple[str, str]]:
+def diff_string_suffix(string1: str, string2: str) -> tuple[str, str] | None:
     """compare two strings and find which one is the suffix of the other"""
 
     if string1 == string2:

@@ -4,15 +4,13 @@
 import sys
 
 import click
-from PyPDF2 import PdfReader
+from PyPDF2 import PasswordType, PdfReader
 
 
 def validate_pdf_password(reader: PdfReader, password: str) -> bool:
     try:
-        if reader.decrypt(password) == 0:
-            return False
-        return True
-    except Exception as e:
+        return reader.decrypt(password) != PasswordType.NOT_DECRYPTED
+    except Exception as e:  # noqa: BLE001
         print(f"An error occurred: {e}")
         sys.exit(1)
 

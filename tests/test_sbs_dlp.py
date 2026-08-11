@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
 from dotfiles import sbs_dlp
 
