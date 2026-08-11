@@ -87,6 +87,10 @@ or probably install with pip:
 pip install 'git+https://github.com/yaleman/dotfiles.git#subdirectory=hollowbyte'
 ```
 
+When a process exits while procfs is being read, Linux can briefly expose a
+status file without memory fields. The monitor skips that incomplete sample and
+continues rather than terminating.
+
 If Python is unavailable, run this shell sampler on the server and substitute
 the PID:
 

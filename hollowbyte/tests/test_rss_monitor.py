@@ -180,3 +180,42 @@ def test_monitor_prints_only_when_memory_changes(
     assert all("pid" not in line.lower() for line in output_lines)
     assert "PIDs changed from none to (42,)" in captured.err
     assert len(output_path.read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_monitor_skips_an_incomplete_proc_status(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sample = MemorySample(pids=(42,), vmrss_kib=100, vmhwm_kib=120, rssanon_kib=80)
+    outcomes: list[MemorySample | MonitorError] = [
+        MonitorError(MonitorErrorKind.INVALID_STATUS, "/proc/42/status is missing: vmrss_kib"),
+        sample,
+    ]
+
+    def resolve_target(_: TargetSelector) -> tuple[int, ...]:
+        return (42,)
+
+    def sample_processes(_: Sequence[int]) -> MemorySample:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, MonitorError):
+            raise outcome
+        return outcome
+
+    def skip_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.resolve_target", resolve_target)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.sample_processes", sample_processes)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.time.sleep", skip_sleep)
+
+    monitor(
+        MonitorConfig(
+            selector=TargetSelector(SelectorKind.SERVICE, "proxy.service"),
+            interval_seconds=0.1,
+            refresh_seconds=60.0,
+            output_path=None,
+            sample_limit=1,
+        )
+    )
+
+    assert "RSS=100 KiB" in capsys.readouterr().out

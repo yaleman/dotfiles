@@ -320,11 +320,13 @@ def monitor(config: MonitorConfig) -> None:
             try:
                 sample = sample_processes(pids)
             except MonitorError as error:
-                if error.kind is not MonitorErrorKind.PROCESS_GONE:
+                if error.kind is MonitorErrorKind.PROCESS_GONE:
+                    pids = ()
+                    baseline = None
+                    previous_sample = None
+                elif error.kind is not MonitorErrorKind.INVALID_STATUS:
                     raise
-                pids = ()
-                baseline = None
-                previous_sample = None
+                time.sleep(config.interval_seconds)
                 continue
 
             if baseline is None:
