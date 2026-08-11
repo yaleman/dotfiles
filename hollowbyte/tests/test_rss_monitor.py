@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 import pytest
 
-from rss_monitor import (
+from hollowbyte_monitor.rss_monitor import (
     MonitorError,
     MonitorErrorKind,
     ProcessMemory,

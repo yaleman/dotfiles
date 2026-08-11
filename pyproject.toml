@@ -8,6 +8,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.3.1",
     "docker>=7.1.0",
+    "hollowbyte-monitor",
     "loguru>=0.7.3",
     "pycryptodome>=3.23.0",
     "pydantic>=2.13.1",
@@ -23,6 +24,14 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 120
+
+[tool.uv.workspace]
+members = [
+    "hollowbyte",
+]
+
+[tool.uv.sources]
+hollowbyte-monitor = { workspace = true, editable = true }
 
 [dependency-groups]
 dev = [
