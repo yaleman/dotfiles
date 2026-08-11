@@ -110,7 +110,7 @@ CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 
 _PID_PATTERN = re.compile(r"\bpid=(\d+)\b")
 _LIBRARY_NAME_PATTERN = re.compile(r"^lib(?:ssl|crypto)\.so(?:\..+)?$")
-_OPENSSL_VERSION_PATTERN = re.compile(r"^OpenSSL\s+.+$")
+_OPENSSL_VERSION_PATTERN = re.compile(r"^OpenSSL\s+\d+\.\d+\.\d+(?:[a-z]+|-[A-Za-z0-9.-]+)?(?:\s|$)")
 _STATUS_FIELDS = {
     "VmRSS": "vmrss_kib",
     "VmHWM": "vmhwm_kib",
@@ -349,27 +349,26 @@ def find_package_version(library_path: Path, runner: CommandRunner = run_command
 
 def report_linked_libraries(
     pids: Sequence[int],
+    reported_paths: set[Path],
     proc_root: Path = Path("/proc"),
     runner: CommandRunner = run_command,
     output: IO[str] | None = None,
 ) -> None:
-    """Print non-fatal OpenSSL linked-library diagnostics for the current PID set."""
+    """Print each mapped OpenSSL library once, regardless of how its PID set changes."""
 
     stream = output if output is not None else sys.stderr
-    libraries: list[tuple[int, Path]] = []
+    libraries: dict[Path, int] = {}
     for pid in pids:
         try:
             mapped_paths = read_loaded_library_paths(pid, proc_root)
-        except MonitorError as error:
-            print(f"Linked libraries for PID {pid}: unavailable ({error.kind.value})", file=stream)
+        except MonitorError:
             continue
-        libraries.extend((pid, path) for path in mapped_paths)
+        for library_path in mapped_paths:
+            libraries.setdefault(library_path, pid)
 
-    if not libraries:
-        print("Linked OpenSSL libraries: none found or inaccessible", file=stream)
-        return
-
-    for pid, library_path in libraries:
+    for library_path, pid in sorted(libraries.items()):
+        if library_path in reported_paths:
+            continue
         process_path = proc_root / str(pid) / "root" / library_path.relative_to("/")
         version = find_openssl_version(process_path, runner)
         package = find_package_version(library_path, runner)
@@ -379,6 +378,7 @@ def report_linked_libraries(
             f"Linked library PID {pid}: {library_path}; OpenSSL={version_text}; package={package_text}",
             file=stream,
         )
+        reported_paths.add(library_path)
 
 
 def format_kib(value: int, *, signed: bool = False) -> str:
@@ -436,6 +436,7 @@ def monitor(config: MonitorConfig) -> None:
     pids: tuple[int, ...] = ()
     baseline: MemorySample | None = None
     previous_sample: MemorySample | None = None
+    reported_library_paths: set[Path] = set()
     observed_peak_kib = 0
     completed_samples = 0
     next_refresh = 0.0
@@ -456,7 +457,7 @@ def monitor(config: MonitorConfig) -> None:
                     baseline = None
                     previous_sample = None
                     observed_peak_kib = 0
-                    report_linked_libraries(pids)
+                    report_linked_libraries(pids, reported_library_paths)
 
             try:
                 sample = sample_processes(pids)

@@ -55,6 +55,8 @@ only when the process set changes, while TSV records retain the PID column.
 At startup and whenever the PID set changes, it also reports mapped `libssl` or
 `libcrypto` libraries, their embedded OpenSSL banner from `strings`, and the
 owning Debian or RPM package version when the relevant tools are available.
+Each library path is reported only once for the life of the monitor, even when
+workers are added or removed.
 Select a systemd service by name:
 
 ```console

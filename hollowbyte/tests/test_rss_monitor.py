@@ -163,10 +163,38 @@ def test_linked_library_report_includes_openssl_and_dpkg_version(tmp_path: Path)
             return completed(command, stdout="libssl3:amd64 3.0.20-1\n")
         return completed(command, returncode=1)
 
-    report_linked_libraries((42,), proc_root, runner, stream)
+    report_linked_libraries((42,), set(), proc_root, runner, stream)
 
     assert "OpenSSL=OpenSSL 3.0.20 1 Jul 2026" in stream.getvalue()
     assert "package=libssl3:amd64 3.0.20-1" in stream.getvalue()
+
+
+def test_linked_library_report_deduplicates_paths_across_pids(tmp_path: Path) -> None:
+    proc_root = tmp_path / "proc"
+    for pid in (42, 43):
+        maps_path = proc_root / str(pid) / "maps"
+        maps_path.parent.mkdir(parents=True)
+        maps_path.write_text(
+            "7f000000-7f001000 r--p 00000000 00:00 1 /usr/lib/libssl.so.3\n",
+            encoding="utf-8",
+        )
+    stream = StringIO()
+    reported_paths: set[Path] = set()
+
+    def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        if command[0] == "strings":
+            return completed(command, stdout="OpenSSL 3.0.20 1 Jul 2026\n")
+        if command[0] == "dpkg-query" and command[1] == "-S":
+            return completed(command, stdout="libssl3:amd64: /usr/lib/libssl.so.3\n")
+        if command[0] == "dpkg-query" and command[1] == "-W":
+            return completed(command, stdout="libssl3:amd64 3.0.20-1\n")
+        return completed(command, returncode=1)
+
+    report_linked_libraries((42, 43), reported_paths, proc_root, runner, stream)
+    report_linked_libraries((43,), reported_paths, proc_root, runner, stream)
+
+    assert stream.getvalue().count("Linked library PID") == 1
+    assert reported_paths == {Path("/usr/lib/libssl.so.3")}
 
 
 def test_openssl_and_package_lookups_report_unavailable_tools() -> None:
