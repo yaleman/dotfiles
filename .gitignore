@@ -14,3 +14,5 @@ build/
 *.pyc
 *.wav
 .codex-work/
+# hollowbyte is a rust thing
+hollowbyte/target/
