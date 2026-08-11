@@ -285,3 +285,52 @@ def test_monitor_skips_an_incomplete_proc_status(
     )
 
     assert "RSS=100 KiB" in capsys.readouterr().out
+
+
+def test_monitor_preserves_baseline_when_apache_workers_join(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pid_sets = iter(((1,), (1, 2)))
+    samples = iter(
+        (
+            MemorySample(pids=(1,), vmrss_kib=100, vmhwm_kib=120, rssanon_kib=80),
+            MemorySample(pids=(1, 2), vmrss_kib=300, vmhwm_kib=320, rssanon_kib=260),
+        )
+    )
+    clock_values = iter((0.0, 1.0))
+
+    def resolve_target(_: TargetSelector) -> tuple[int, ...]:
+        return next(pid_sets)
+
+    def sample_processes(_: Sequence[int]) -> MemorySample:
+        return next(samples)
+
+    def monotonic() -> float:
+        return next(clock_values)
+
+    def skip_sleep(_: float) -> None:
+        return None
+
+    def skip_library_report(_: Sequence[int], __: set[Path]) -> None:
+        return None
+
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.resolve_target", resolve_target)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.sample_processes", sample_processes)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.time.monotonic", monotonic)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.time.sleep", skip_sleep)
+    monkeypatch.setattr("hollowbyte_monitor.rss_monitor.report_linked_libraries", skip_library_report)
+
+    monitor(
+        MonitorConfig(
+            selector=TargetSelector(SelectorKind.PORT, "443"),
+            interval_seconds=0.1,
+            refresh_seconds=0.5,
+            output_path=None,
+            sample_limit=2,
+        )
+    )
+
+    captured = capsys.readouterr()
+    assert "delta=+200 KiB" in captured.out
+    assert "baseline preserved" in captured.err

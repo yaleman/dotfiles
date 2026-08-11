@@ -448,15 +448,21 @@ def monitor(config: MonitorConfig) -> None:
                 resolved = resolve_target(config.selector)
                 next_refresh = now + config.refresh_seconds
                 if resolved != pids:
+                    previous_pids = pids
+                    process_replaced = bool(previous_pids) and not set(previous_pids).intersection(resolved)
+                    if process_replaced:
+                        baseline = None
+                        previous_sample = None
+                        observed_peak_kib = 0
+                        baseline_status = "baseline reset after process replacement"
+                    else:
+                        baseline_status = "baseline preserved"
                     print(
                         f"Monitoring {config.selector.description}; PIDs changed from "
-                        f"{pids or 'none'} to {resolved}; baseline reset.",
+                        f"{pids or 'none'} to {resolved}; {baseline_status}.",
                         file=sys.stderr,
                     )
                     pids = resolved
-                    baseline = None
-                    previous_sample = None
-                    observed_peak_kib = 0
                     report_linked_libraries(pids, reported_library_paths)
 
             try:

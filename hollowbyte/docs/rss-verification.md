@@ -46,12 +46,13 @@ linked library. It does not by itself prove that OpenSSL is absent.
 `RssAnon` isolates anonymous resident memory, which is the most relevant part
 for heap allocation.
 
-The live monitor resolves the PID again every two seconds, resets its baseline
-when the process set changes, and shows current RSS, change from baseline,
-anonymous RSS, observed peak, and kernel high-water mark. It prints the initial
-sample and then a new line only when one of those values or the PID set changes;
-timestamps alone do not produce output. PIDs appear in a separate notification
-only when the process set changes, while TSV records retain the PID column.
+The live monitor resolves the PID again every two seconds and shows current RSS,
+change from baseline, anonymous RSS, observed peak, and kernel high-water mark.
+It preserves the baseline while workers are added or removed, resetting only
+when every prior PID has been replaced. It prints the initial sample and then a
+new line only when one of those values or the PID set changes; timestamps alone
+do not produce output. PIDs appear in a separate notification only when the
+process set changes, while TSV records retain the PID column.
 At startup and whenever the PID set changes, it also reports mapped `libssl` or
 `libcrypto` libraries, their embedded OpenSSL banner from `strings`, and the
 owning Debian or RPM package version when the relevant tools are available.
