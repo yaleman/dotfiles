@@ -50,7 +50,9 @@ The live monitor resolves the PID again every two seconds, resets its baseline
 when the process set changes, and shows current RSS, change from baseline,
 anonymous RSS, observed peak, and kernel high-water mark. It prints the initial
 sample and then a new line only when one of those values or the PID set changes;
-timestamps alone do not produce output. Select a systemd service by name:
+timestamps alone do not produce output. PIDs appear in a separate notification
+only when the process set changes, while TSV records retain the PID column.
+Select a systemd service by name:
 
 ```console
  uvx --no-cache --from 'git+https://github.com/yaleman/dotfiles.git#subdirectory=hollowbyte' \

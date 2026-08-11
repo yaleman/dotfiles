@@ -258,10 +258,9 @@ def render_sample(
 ) -> str:
     """Render one live terminal status line."""
 
-    pid_text = ",".join(str(pid) for pid in sample.pids)
     return (
         f"{datetime.now().astimezone().isoformat(timespec='seconds')}  "
-        f"{selector.description}  pids={pid_text}  "
+        f"{selector.description}  "
         f"RSS={format_kib(sample.vmrss_kib)} "
         f"delta={format_kib(sample.vmrss_kib - baseline.vmrss_kib, signed=True)}  "
         f"Anon={format_kib(sample.rssanon_kib)} "

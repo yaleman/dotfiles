@@ -172,8 +172,11 @@ def test_monitor_prints_only_when_memory_changes(
         )
     )
 
-    output_lines = capsys.readouterr().out.splitlines()
+    captured = capsys.readouterr()
+    output_lines = captured.out.splitlines()
     assert len(output_lines) == 2
     assert "RSS=100 KiB" in output_lines[0]
     assert "RSS=110 KiB" in output_lines[1]
+    assert all("pid" not in line.lower() for line in output_lines)
+    assert "PIDs changed from none to (42,)" in captured.err
     assert len(output_path.read_text(encoding="utf-8").splitlines()) == 3
