@@ -217,7 +217,7 @@ private func usage() -> Never {
               \(program) set NAME
               \(program) get NAME
               \(program) delete NAME
-              \(program) migrate
+              \(program) migrate - migrate secrets from original to current format
 
             set reads the secret from stdin.
 
