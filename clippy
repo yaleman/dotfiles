@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [[ $(mise tasks | grep -c clippy) -eq 1 ]]; then
+if [[ $(mise tasks | grep -Ec '^clippy\s*$') -eq 1 ]]; then
 	mise clippy
 else
 	# shellcheck disable=SC2086
