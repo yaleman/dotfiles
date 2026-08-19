@@ -9,7 +9,7 @@ private let labelPrefix = "keychain-secret:"
 private let oldLabelPrefix = "direnv secret: "
 
 private let logger = Logger(
-    subsystem: "com.yaleman.keychain-secret",
+    subsystem: service,
     category: "debugging"
 )
 

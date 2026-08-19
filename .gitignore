@@ -16,3 +16,4 @@ build/
 .codex-work/
 # hollowbyte is a rust thing
 hollowbyte/target/
+keychain-secret
