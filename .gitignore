@@ -1,5 +1,8 @@
+# compiled things
+keychain-secret
 howmanytabsraw
 howmanytabsraw.plist
+# others
 .vscode/
 .DS_Store
 config.py
@@ -14,7 +17,7 @@ build/
 *.pyc
 *.wav
 .codex-work/
-# hollowbyte is a rust thing
-hollowbyte/target/
-keychain-secret
+# rust things
+**/target/
+# derp
 .playwright-cli/
