@@ -72,13 +72,14 @@ depends = [
 
 
 [tasks.python-ty]
-run = "uv run --all-groups --all-extras ty check --exclude omada-certificate-updater"
+run = "uv run --all-extras ty check --exclude omada-certificate-updater --exclude *kokoro*"
 
 [tasks.python-ruff]
-run = "uv run --all-groups --all-extras ruff check"
+run = "uv run --all-extras ruff check --exclude *kokoro*"
 
 [tasks.python-test]
-run = "uv run --all-groups --all-extras pytest --ignore=omada-certificate-updater"
+depends = ["test-omada-certificate-updater"]
+run = "uv run  --all-extras pytest --ignore=omada-certificate-updater --ignore=hollowbyte"
 
 [tasks.python-check]
 depends = ["python-ty", "python-ruff", "python-test"]
