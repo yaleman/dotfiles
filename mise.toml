@@ -31,6 +31,14 @@ run = '''
 clean-big-targets --delete --force "$HOME/Projects"
 '''
 
+[tasks.cleanup-pycache]
+run = [
+    "fd --type d __pycache__  $HOME/Projects --no-ignore --exec-batch rm -rf",
+]
+
+[tasks.cleanup-swift]
+run = ["cleanup-xcode.sh $HOME/Projects"]
+
 [tasks.cleanup-venvs]
 description = "Clean venvs"
 run = '''
@@ -72,14 +80,13 @@ depends = [
 
 
 [tasks.python-ty]
-run = "uv run --all-extras ty check --exclude omada-certificate-updater --exclude *kokoro*"
+run = "uv run --all-extras ty check"
 
 [tasks.python-ruff]
-run = "uv run --all-extras ruff check --exclude *kokoro*"
+run = "uv run --all-extras ruff check"
 
 [tasks.python-test]
-depends = ["test-omada-certificate-updater"]
-run = "uv run  --all-extras pytest --ignore=omada-certificate-updater --ignore=hollowbyte"
+run = "uv run  --all-extras pytest"
 
 [tasks.python-check]
 depends = ["python-ty", "python-ruff", "python-test"]
@@ -97,21 +104,6 @@ run = "uvx codespell"
 [tasks.howmanytabs]
 run = "osacompile -o howmanytabsraw howmanytabsraw.applescript"
 
-[tasks.test-omada-certificate-updater]
-dir = "./omada-certificate-updater"
-run = [
-    "uv run --locked pytest",
-    "uv run --locked ruff check .",
-    "uv run --locked ty check",
-]
-
-[tasks.check-omada-certificate-updater]
-dir = "./omada-certificate-updater"
-run = [
-    "uv run ty check",
-    "uv run ruff check .",
-    { task = "test-omada-certificate-updater" },
-]
 
 
 [tasks.build-omada-certificate-updater]
@@ -131,15 +123,9 @@ depends = [
     "shellcheck",
     "codespell",
     "python-check",
-    "check-omada-certificate-updater",
 ]
+
 [tools]
 shellcheck = "latest"
 uv = "latest"
 
-[tasks.cleanup-pycache]
-run = [
-    "fd --type d __pycache__  $HOME/Projects --no-ignore --exec-batch rm -rf",
-]
-[tasks.cleanup-swift]
-run = ["cleanup-xcode.sh $HOME/Projects"]

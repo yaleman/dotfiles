@@ -11,6 +11,7 @@ dependencies = [
     "hollowbyte-monitor",
     "kubernetes>=36.0.3",
     "loguru>=0.7.3",
+    "omada-certificate-updater",
     "pycryptodome>=3.23.0",
     "pydantic>=2.13.1",
     "pypdf2>=3.0.1",
@@ -29,10 +30,12 @@ line-length = 120
 [tool.uv.workspace]
 members = [
     "hollowbyte",
+    "omada-certificate-updater",
 ]
 
 [tool.uv.sources]
 hollowbyte-monitor = { workspace = true, editable = true }
+omada-certificate-updater = { workspace = true, editable = true }
 
 [dependency-groups]
 dev = [
