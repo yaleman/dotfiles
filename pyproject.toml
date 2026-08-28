@@ -6,13 +6,11 @@ authors = [{ name = "James Hodgkinson", email = "james@terminaloutcomes.com" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "click>=8.3.1",
+    "click>=8.5.0",
     "docker>=7.1.0",
-    "hollowbyte-monitor",
     "kubernetes>=36.0.3",
     "loguru>=0.7.3",
     "lzstring>=1.0.4",
-    "omada-certificate-updater",
     "pycryptodome>=3.23.0",
     "pydantic>=2.13.1",
     "pypdf2>=3.0.1",
@@ -28,24 +26,18 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 120
 
+[tool.uv]
+default-groups = "all"
+
 [tool.uv.workspace]
-members = [
-    "hollowbyte",
-    "omada-certificate-updater",
-]
+members = ["hollowbyte", "omada-certificate-updater"]
 
 [tool.uv.sources]
 hollowbyte-monitor = { workspace = true, editable = true }
 omada-certificate-updater = { workspace = true, editable = true }
 
 [dependency-groups]
-dev = [
-    "mypy>=1.19.0",
-    "pytest>=9.0.3",
-    "ruff>=0.15.11",
-    "ty>=0.0.31",
-    "types-requests>=2.32.0.20250515",
-]
+dev = ["pytest>=9.0.3", "ruff>=0.16.5", "ty>=0.0.75"]
 
 kokoro = [
     "kokoro>=0.9.4",
@@ -53,6 +45,11 @@ kokoro = [
     "numpy>=2.4.4",
     "misaki[en]>=0.9.4",
 ]
+
+omada-certificate-updater = ["omada-certificate-updater"]
+
+hollowbyte = ["hollowbyte-monitor"]
+
 
 [project.scripts]
 sbs-dlp = "dotfiles.sbs_dlp:main"

@@ -60,8 +60,7 @@ environment configuration and automation for macOS.
 
 ### Project Configuration
 
-- **Python**: Modern toolchain with uv, ruff (120 char line length), mypy
-  --strict, pytest
+- **Python**: Modern toolchain with uv, ruff (120 char line length), ty check, pytest
 - **Dependencies**: Click, Loguru, Pycryptodome, Pydantic, PyPDF2, requests
 - **Quality standards**: All Python code must pass strict type checking and
   linting before completion

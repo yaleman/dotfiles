@@ -56,7 +56,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all
 uv run --project . ruff format --check monitor_rss.py rss_monitor.py tests
 uv run --project . ruff check monitor_rss.py rss_monitor.py tests
-uv run --project . mypy --strict monitor_rss.py rss_monitor.py tests
+uv run --project . ty check monitor_rss.py rss_monitor.py tests
 uv run --project . pytest
 ```
 

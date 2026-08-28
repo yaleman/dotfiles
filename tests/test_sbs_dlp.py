@@ -1,4 +1,5 @@
 import json
+from netrc import netrc
 from pathlib import Path
 
 import pytest
@@ -152,7 +153,7 @@ def test_cli_download_passes_urls_to_yt_dlp(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
 
-    result = runner.invoke(sbs_dlp.main, ["--download", FIXTURE_URLS["catch_22"]])
+    result = runner.invoke(sbs_dlp.main, ["--download", "--handler", "legacy", FIXTURE_URLS["catch_22"]])
 
     assert result.exit_code == 0
     assert "Running uvx yt-dlp" in result.output
@@ -161,6 +162,7 @@ def test_cli_download_passes_urls_to_yt_dlp(monkeypatch: pytest.MonkeyPatch) -> 
             [
                 "uvx",
                 "yt-dlp",
+                "--abort-on-error",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep1/2474793027793",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep2/2474793027794",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep3/2474793027795",
@@ -186,15 +188,19 @@ def test_cli_download_with_subs_passes_all_subs_to_yt_dlp(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
 
-    result = runner.invoke(sbs_dlp.main, ["--download", "--subs", FIXTURE_URLS["catch_22"]])
+    result = runner.invoke(
+        sbs_dlp.main,
+        ["--download", "--subs", "--handler", "legacy", FIXTURE_URLS["catch_22"]],
+    )
 
     assert result.exit_code == 0
-    assert "Running uvx yt-dlp --all-subs" in result.output
+    assert "Running uvx yt-dlp --abort-on-error --all-subs" in result.output
     assert calls == [
         (
             [
                 "uvx",
                 "yt-dlp",
+                "--abort-on-error",
                 "--all-subs",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep1/2474793027793",
                 "https://www.sbs.com.au/ondemand/tv-series/catch-22/season-1/catch-22-s1-ep2/2474793027794",
@@ -206,3 +212,186 @@ def test_cli_download_with_subs_passes_all_subs_to_yt_dlp(monkeypatch: pytest.Mo
             True,
         )
     ]
+
+
+def test_cli_download_uses_playback_watch_urls_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = load_payload("catch_22")
+    runner = CliRunner()
+    calls: list[tuple[list[str], bool]] = []
+
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+
+    def fake_run(command: list[str], check: bool) -> None:
+        calls.append((command, check))
+
+    monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
+
+    result = runner.invoke(sbs_dlp.main, ["--download", FIXTURE_URLS["catch_22"]])
+
+    assert result.exit_code == 0
+    command, check = calls[0]
+    assert check is True
+    assert command[:4] == ["uvx", "--from", sbs_dlp.PLAYBACK_YT_DLP_SOURCE, "yt-dlp"]
+    assert command[4:] == [
+        "--plugin-dirs",
+        str(sbs_dlp.YTDLP_PLUGIN_DIR),
+        "--abort-on-error",
+        "https://www.sbs.com.au/ondemand/watch/2474793027793",
+        "https://www.sbs.com.au/ondemand/watch/2474793027794",
+        "https://www.sbs.com.au/ondemand/watch/2474793027795",
+        "https://www.sbs.com.au/ondemand/watch/2474793027796",
+        "https://www.sbs.com.au/ondemand/watch/2474793027797",
+        "https://www.sbs.com.au/ondemand/watch/2474793027798",
+    ]
+
+
+@pytest.mark.parametrize("handler", ["legacy", "playback"])
+def test_cli_passes_cookies_from_browser_to_download_handler(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: str,
+) -> None:
+    payload = load_payload("catch_22")
+    runner = CliRunner()
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+
+    def fake_run(command: list[str], check: bool) -> None:
+        assert check is True
+        calls.append(command)
+
+    monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        sbs_dlp.main,
+        [
+            "--download",
+            "--handler",
+            handler,
+            "--cookies-from-browser",
+            "chrome:Default",
+            FIXTURE_URLS["catch_22"],
+        ],
+    )
+
+    assert result.exit_code == 0
+    cookie_option_index = calls[0].index("--cookies-from-browser")
+    assert calls[0][cookie_option_index : cookie_option_index + 2] == [
+        "--cookies-from-browser",
+        "chrome:Default",
+    ]
+    assert "--abort-on-error" in calls[0]
+
+
+@pytest.mark.parametrize("handler", ["legacy", "playback"])
+def test_cli_passes_existing_output_directory_to_download_handler(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    handler: str,
+) -> None:
+    payload = load_payload("catch_22")
+    runner = CliRunner()
+    output_dir = tmp_path / "downloads"
+    output_dir.mkdir()
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+
+    def fake_run(command: list[str], check: bool) -> None:
+        assert check is True
+        calls.append(command)
+
+    monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        sbs_dlp.main,
+        ["--download", "--handler", handler, "--output-dir", str(output_dir), FIXTURE_URLS["catch_22"]],
+    )
+
+    assert result.exit_code == 0
+    output_option_index = calls[0].index("--paths")
+    assert calls[0][output_option_index : output_option_index + 2] == ["--paths", str(output_dir.resolve())]
+
+
+def test_cli_output_directory_expands_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    payload = load_payload("catch_22")
+    runner = CliRunner()
+    home_dir = tmp_path / "home"
+    output_dir = home_dir / "Downloads" / "SBS"
+    output_dir.mkdir(parents=True)
+    calls: list[list[str]] = []
+
+    monkeypatch.setenv("HOME", str(home_dir))
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+
+    def fake_run(command: list[str], check: bool) -> None:
+        assert check is True
+        calls.append(command)
+
+    monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        sbs_dlp.main,
+        ["--download", "--output-dir", "~/Downloads/SBS", FIXTURE_URLS["catch_22"]],
+    )
+
+    assert result.exit_code == 0
+    output_option_index = calls[0].index("--paths")
+    assert calls[0][output_option_index + 1] == str(output_dir.resolve())
+
+
+@pytest.mark.parametrize("path_kind", ["missing", "file"])
+def test_cli_rejects_invalid_output_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    path_kind: str,
+) -> None:
+    runner = CliRunner()
+    output_path = tmp_path / path_kind
+    if path_kind == "file":
+        output_path.write_text("not a directory", encoding="utf-8")
+
+    monkeypatch.setattr(sbs_dlp.CacheUrl, "__init__", lambda self, url: None)
+
+    result = runner.invoke(sbs_dlp.main, ["--download", "--output-dir", str(output_path), "ignored"])
+
+    assert result.exit_code == 2
+    expected_message = "does not exist" if path_kind == "missing" else "is not a directory"
+    assert expected_message in result.output
+
+
+def test_cli_playback_login_uses_temporary_netrc(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = load_payload("catch_22")
+    runner = CliRunner()
+    captured_netrc = ""
+
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+
+    def fake_run(command: list[str], check: bool) -> None:
+        nonlocal captured_netrc
+        assert check is True
+        netrc_path = Path(command[command.index("--netrc-location") + 1])
+        captured_netrc = netrc_path.read_text(encoding="utf-8")
+        assert netrc_path.stat().st_mode & 0o777 == 0o600
+        assert netrc(netrc_path).authenticators("sbs") == (
+            "viewer@example.com",
+            "",
+            "correct horse battery staple",
+        )
+
+    monkeypatch.setattr(sbs_dlp.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        sbs_dlp.main,
+        ["--download", "--login", FIXTURE_URLS["catch_22"]],
+        input="viewer@example.com\ncorrect horse battery staple\n",
+    )
+
+    assert result.exit_code == 0
+    assert captured_netrc == 'machine sbs login "viewer@example.com" password "correct horse battery staple"\n'
+    assert "correct horse battery staple" not in result.output

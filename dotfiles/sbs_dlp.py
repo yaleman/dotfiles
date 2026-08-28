@@ -6,8 +6,10 @@ import json
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
+from enum import Enum
 from hashlib import sha256
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import click
@@ -17,6 +19,30 @@ from loguru import logger
 JSON_PREFIX = '.streamController.enqueue("'
 JSON_SUFFIX = '\\n");</script>'
 CACHE_DIR = Path.home() / ".cache" / "sbs-dlp"
+PLAYBACK_YT_DLP_SOURCE = "git+https://github.com/0xvd/yt-dlp-exp@ee4f1076e61969c8df41a480269e10dee5d82cbd"
+YTDLP_PLUGIN_DIR = Path(__file__).parents[1] / "yt-dlp-plugins"
+
+
+class DownloadHandler(Enum):
+    LEGACY = "legacy"
+    PLAYBACK = "playback"
+
+
+class ExistingDirectory(click.ParamType):
+    name = "directory"
+
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> Path:
+        directory = Path(str(value)).expanduser()
+        if not directory.exists():
+            self.fail(f"{directory} does not exist", param, ctx)
+        if not directory.is_dir():
+            self.fail(f"{directory} is not a directory", param, ctx)
+        return directory.resolve()
 
 
 @dataclass(frozen=True)
@@ -157,6 +183,10 @@ def build_episode_url(series_slug: str, season_slug: str, episode_slug: str, mpx
     return f"https://www.sbs.com.au/ondemand/tv-series/{series_slug}/{season_slug}/{episode_slug}/{mpx_media_id}"
 
 
+def build_watch_url(mpx_media_id: int) -> str:
+    return f"https://www.sbs.com.au/ondemand/watch/{mpx_media_id}"
+
+
 def season_slug_for(season: dict[str, Any], episode: dict[str, Any]) -> str:
     season_slug = season.get("slug") or episode.get("seasonSlug")
     if isinstance(season_slug, str) and season_slug:
@@ -202,13 +232,47 @@ def render_output(episodes: list[EpisodeMetadata], as_json: bool) -> str:
     return "\n".join(episode.episode_url for episode in episodes)
 
 
-def yt_dlp_command(episodes: list[EpisodeMetadata], subs: bool = False) -> list[str]:
+def yt_dlp_command(
+    episodes: list[EpisodeMetadata],
+    subs: bool = False,
+    handler: DownloadHandler = DownloadHandler.LEGACY,
+    netrc_location: Path | None = None,
+    cookies_from_browser: str | None = None,
+    output_dir: Path | None = None,
+) -> list[str]:
     subtitle_args = ["--all-subs"] if subs else []
-    return ["uvx", "yt-dlp", *subtitle_args, *(episode.episode_url for episode in episodes)]
+    cookie_args = ["--cookies-from-browser", cookies_from_browser] if cookies_from_browser else []
+    output_args = ["--paths", str(output_dir)] if output_dir else []
+    error_args = ["--abort-on-error"]
+    if handler is DownloadHandler.LEGACY:
+        return [
+            "uvx",
+            "yt-dlp",
+            *error_args,
+            *cookie_args,
+            *output_args,
+            *subtitle_args,
+            *(episode.episode_url for episode in episodes),
+        ]
+
+    authentication_args = ["--netrc", "--netrc-location", str(netrc_location)] if netrc_location else []
+    return [
+        "uvx",
+        "--from",
+        PLAYBACK_YT_DLP_SOURCE,
+        "yt-dlp",
+        "--plugin-dirs",
+        str(YTDLP_PLUGIN_DIR),
+        *error_args,
+        *authentication_args,
+        *cookie_args,
+        *output_args,
+        *subtitle_args,
+        *(build_watch_url(episode.mpx_media_id) for episode in episodes),
+    ]
 
 
-def download_episodes(episodes: list[EpisodeMetadata], subs: bool = False) -> None:
-    command = yt_dlp_command(episodes, subs=subs)
+def run_yt_dlp(command: list[str]) -> None:
     logger.info(f"Running {' '.join(command)}")
     try:
         subprocess.run(command, check=True)
@@ -216,13 +280,77 @@ def download_episodes(episodes: list[EpisodeMetadata], subs: bool = False) -> No
         raise click.ClickException(f"yt-dlp exited with status {error.returncode}") from error
 
 
+def download_episodes(
+    episodes: list[EpisodeMetadata],
+    subs: bool = False,
+    handler: DownloadHandler = DownloadHandler.LEGACY,
+    login: bool = False,
+    cookies_from_browser: str | None = None,
+    output_dir: Path | None = None,
+) -> None:
+    if not login:
+        run_yt_dlp(
+            yt_dlp_command(
+                episodes,
+                subs=subs,
+                handler=handler,
+                cookies_from_browser=cookies_from_browser,
+                output_dir=output_dir,
+            )
+        )
+        return
+
+    if handler is DownloadHandler.LEGACY:
+        raise click.UsageError("--login is only supported by the playback handler")
+
+    username = click.prompt("SBS email")
+    password = click.prompt("SBS password", hide_input=True)
+    with TemporaryDirectory(prefix="sbs-dlp-") as temporary_directory:
+        netrc_path = Path(temporary_directory) / "netrc"
+        netrc_path.write_text(
+            f"machine sbs login {json.dumps(username)} password {json.dumps(password)}\n",
+            encoding="utf-8",
+        )
+        netrc_path.chmod(0o600)
+        run_yt_dlp(
+            yt_dlp_command(
+                episodes,
+                subs=subs,
+                handler=handler,
+                netrc_location=netrc_path,
+                cookies_from_browser=cookies_from_browser,
+                output_dir=output_dir,
+            )
+        )
+
+
 @click.command()
 @click.argument("url")
 @click.option("--json", "as_json", is_flag=True, help="Emit structured episode metadata as JSON")
 @click.option("--download", is_flag=True, help="Pass extracted episode URLs to yt-dlp")
 @click.option("--subs", is_flag=True, help="Pass --all-subs to yt-dlp when downloading")
+@click.option("--cookies-from-browser", metavar="BROWSER", help="Pass browser cookies to yt-dlp")
+@click.option("--output-dir", type=ExistingDirectory(), help="Write downloads to an existing directory")
+@click.option(
+    "--handler",
+    type=click.Choice([handler.value for handler in DownloadHandler], case_sensitive=False),
+    default=DownloadHandler.PLAYBACK.value,
+    show_default=True,
+    help="Select the SBS URL/download implementation",
+)
+@click.option("--login", is_flag=True, help="Prompt for SBS credentials for the playback handler")
 @click.option("--debug", is_flag=True, help="Enable debug logging")
-def main(url: str, as_json: bool, download: bool, subs: bool, debug: bool) -> None:
+def main(
+    url: str,
+    as_json: bool,
+    download: bool,
+    subs: bool,
+    cookies_from_browser: str | None,
+    output_dir: Path | None,
+    handler: str,
+    login: bool,
+    debug: bool,
+) -> None:
     logger.remove()
     logger.add(sys.stderr, level="DEBUG" if debug else "INFO")
 
@@ -235,7 +363,14 @@ def main(url: str, as_json: bool, download: bool, subs: bool, debug: bool) -> No
         raise SystemExit(1)
 
     if download:
-        download_episodes(episodes, subs=subs)
+        download_episodes(
+            episodes,
+            subs=subs,
+            handler=DownloadHandler(handler),
+            login=login,
+            cookies_from_browser=cookies_from_browser,
+            output_dir=output_dir,
+        )
         return
 
     click.echo(render_output(episodes, as_json))
@@ -243,9 +378,13 @@ def main(url: str, as_json: bool, download: bool, subs: bool, debug: bool) -> No
 
 __all__ = [
     "CACHE_DIR",
+    "YTDLP_PLUGIN_DIR",
     "CacheUrl",
+    "DownloadHandler",
     "EpisodeMetadata",
+    "ExistingDirectory",
     "build_episode_url",
+    "build_watch_url",
     "decode_key",
     "decode_node",
     "decode_reference",
@@ -258,6 +397,7 @@ __all__ = [
     "find_collection_refs",
     "main",
     "render_output",
+    "run_yt_dlp",
     "season_slug_for",
     "yt_dlp_command",
 ]
