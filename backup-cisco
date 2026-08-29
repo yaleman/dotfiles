@@ -1,12 +1,9 @@
 #!/bin/bash
 
-if [ -z "${1}" ]; then
-    HOSTNAME="c3650.housenet.yaleman.org"
-else
-    HOSTNAME="${1}"
-fi
+set -ueo pipefail
 
-BACKUPDIR="${HOME}/Nextcloud/Backups/${HOSTNAME}"
+HOSTNAME="${1:-c3650.housenet.yaleman.org}"
+BACKUPDIR="${YALEMAN_BACKUP_DIR:?Set YALEMAN_BACKUP_DIR as an env var}/${HOSTNAME}"
 BACKUPFILE="${BACKUPDIR}/$(date +%Y-%m-%d-%H%M%S).conf.gz"
 mkdir -p "${BACKUPDIR}"
 

@@ -1,8 +1,10 @@
 #!/bin/bash
 
-BACKUPDIR="${HOME}/Nextcloud/Backups/ex3300/$(date +%Y-%m-%d-%H%M%S)"
+# backs up a juniper switch that doesn't exist anymore :D
 
-mkdir "${BACKUPDIR}"
+BACKUPDIR="${YALEMAN_BACKUP_DIR:?Set YALEMAN_BACKUP_DIR as an env var}/ex3300/$(date +%Y-%m-%d-%H%M%S)"
+
+mkdir -p "${BACKUPDIR}"
 
 cd "${BACKUPDIR}" || exit 1
 

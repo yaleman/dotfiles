@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BACKUP_DIR="$HOME/Nextcloud/Backups/minio-backups"
+BACKUP_DIR="${YALEMAN_BACKUP_DIR:?Set YALEMAN_BACKUP_DIR as an env var}/minio-backups"
 
 if [ ! -d "${BACKUP_DIR}" ]; then
     echo "Backup dir ${BACKUP_DIR} not found"
