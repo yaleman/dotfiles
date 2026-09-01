@@ -190,6 +190,44 @@ private func getSecret(name: String) {
     FileHandle.standardOutput.write(data)
 }
 
+private func listSecrets() {
+    let search: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecReturnAttributes as String: true,
+        kSecMatchLimit as String: kSecMatchLimitAll,
+    ]
+
+    var result: CFTypeRef?
+    let status = SecItemCopyMatching(search as CFDictionary, &result)
+
+    switch status {
+    case errSecSuccess:
+        break
+    case errSecItemNotFound:
+        return
+    default:
+        die("could not list secrets: \(securityError(status))")
+    }
+
+    guard let items = result as? [[String: Any]] else {
+        die("Keychain returned unexpected search results")
+    }
+
+    let names = items.map { item in
+        guard let name = item[kSecAttrAccount as String] as? String else {
+            die("Keychain returned a secret without a name")
+        }
+        return name
+    }.sorted()
+
+    guard !names.isEmpty else {
+        return
+    }
+
+    FileHandle.standardOutput.write(Data((names.joined(separator: "\n") + "\n").utf8))
+}
+
 private func deleteSecret(name: String) {
     let status = SecItemDelete(
         query(for: name) as CFDictionary
@@ -216,6 +254,7 @@ private func usage() -> Never {
             Usage:
               \(program) set NAME
               \(program) get NAME
+              \(program) list
               \(program) delete NAME
               \(program) migrate - migrate secrets from original to current format
 
@@ -257,6 +296,10 @@ case "get":
     let name = CommandLine.arguments[2]
     guard !name.isEmpty else { die("secret name cannot be empty") }
     getSecret(name: name)
+
+case "list":
+    guard CommandLine.arguments.count == 2 else { usage() }
+    listSecrets()
 
 case "delete", "rm":
     guard CommandLine.arguments.count == 3 else { usage() }

@@ -1,12 +1,12 @@
 tap "homebrew/cask"
 tap "homebrew/core"
 tap "kanidm/kanidm", trusted: true
-tap "osx-cross/avr"
-tap "rfidresearchgroup/proxmark3", "https://github.com/RfidResearchGroup/homebrew-proxmark3"
+tap "osx-cross/avr", trusted: true
+tap "rfidresearchgroup/proxmark3", "https://github.com/RfidResearchGroup/homebrew-proxmark3", trusted: true
 tap "terminaloutcomes/handbrakecli", trusted: true
-tap "terminaloutcomes/symlinks"
+tap "terminaloutcomes/symlinks", trusted: true
 tap "yaleman/proxmark3", trusted: true
-tap "ykursadkaya/openlens"
+tap "ykursadkaya/openlens", trusted: true
 # Cryptography and SSL/TLS Toolkit
 brew "openssl@3"
 # Work with ID3 metadata in .mp3 files
@@ -15,8 +15,6 @@ brew "eye-d3"
 brew "glib"
 # Music related metadata search engine with command-line interface and C API
 brew "glyr"
-# Portable Foreign Function Interface library
-brew "libffi"
 # Interpreted, interactive, object-oriented programming language
 brew "python@3.9"
 # Better CD Encoder
@@ -35,6 +33,8 @@ brew "arduino-cli"
 brew "asciinema"
 # Code searching, linting, rewriting
 brew "ast-grep"
+# Improved shell history for zsh, bash, fish and nushell
+brew "atuin"
 # Automatic configure script builder
 brew "autoconf"
 # Tool for generating GNU Standards-compliant Makefiles
@@ -67,6 +67,8 @@ brew "libuv"
 brew "node"
 # Secure and free password manager for all of your devices
 brew "bitwarden-cli"
+# Interpreter for the brainfuck language
+brew "brainfuck"
 # New file format for still image compression
 brew "jpeg-xl"
 # SDL2 compatibility layer that uses SDL3 behind the scenes
@@ -97,6 +99,8 @@ brew "cloudflared"
 brew "cmake"
 # Command-line tool to manage cert-manager
 brew "cmctl"
+# Dependency manager for Cocoa projects
+brew "cocoapods"
 # Up-to-date code documentation for LLMs and AI code editors
 brew "context7-mcp"
 # Apjanke's fork of the classic cowsay project
@@ -226,7 +230,7 @@ brew "grpcurl"
 # Subtitle renderer for the ASS/SSA subtitle format
 brew "libass"
 # Open-source video transcoder available for Linux, Mac, and Windows
-brew "handbrake", link: false
+brew "handbrake"
 # Kubernetes package manager
 brew "helm"
 # Improved top (interactive process viewer)
@@ -319,6 +323,8 @@ brew "noseyparker"
 brew "nushell"
 # Manage multiple Node.js versions
 brew "nvm"
+# HTTP load generator, inspired by rakyll/hey with tui animation
+brew "oha"
 # Create, run, and share large language models (LLMs)
 brew "ollama"
 # On-chip debugging, in-system programming and boundary-scan testing
@@ -465,6 +471,8 @@ brew "weasyprint"
 brew "wget"
 # Homebrew, but with Docker images
 brew "whalebrew"
+# Generate your Xcode project from a spec file and your folder structure
+brew "xcodegen"
 # Convert XML to another format (based on XSL or other tools)
 brew "xmlto"
 # Command-line XML and HTML beautifier and content extractor
@@ -544,6 +552,8 @@ cask "flowvision"
 cask "font-iosevka"
 cask "font-source-code-pro"
 cask "font-source-code-pro-for-powerline"
+# Audio converter and CD ripper
+cask "freac"
 # 3D parametric modeller
 cask "freecad"
 # Software reverse engineering (SRE) suite of tools
@@ -596,7 +606,6 @@ cask "macupdater"
 cask "macwhisper"
 # Video format converter (transcoder)
 cask "makemkv"
-# Creats high-quality audio files in various formats, from CDs or files
 cask "max"
 # Multi-platform web browser
 cask "microsoft-edge"
@@ -620,7 +629,7 @@ cask "opencode-desktop"
 # Open source build of Lens Kubernetes IDE
 cask "openlens"
 # Programmable solid 3D CAD modeller
-cask "openscad"
+cask "openscad@snapshot"
 # JDK from Oracle
 cask "oracle-jdk"
 # Replacement for Docker Desktop
@@ -641,6 +650,10 @@ cask "rectangle"
 cask "retrobatch"
 # Rust IDE
 cask "rustrover"
+# File syncing client
+cask "seafile-client"
+# Tool that provides consistent, highly configurable symbols for apps
+cask "sf-symbols"
 # Instant messaging application focusing on security
 cask "signal"
 # Video game digital distribution service
@@ -655,6 +668,8 @@ cask "trunk-io"
 cask "visual-studio-code"
 # Multimedia player
 cask "vlc"
+# Menu bar app for USB-C cable diagnostics
+cask "whatcable"
 # Network protocol analyzer
 cask "wireshark-app"
 # X Certificate and Key management
@@ -665,8 +680,6 @@ cask "xnapper"
 cask "xquartz"
 # Full-featured companion app to the YubiKey
 cask "yubico-authenticator"
-# Multiplayer code editor
-cask "zed"
 mas "Bitwarden", id: 1352778147
 mas "Brother P-touch Editor", id: 1453365242
 mas "Hyperspace", id: 6739505345
@@ -685,7 +698,6 @@ mas "Steam Link", id: 1246969117
 mas "Telegram", id: 747648890
 mas "TestFlight", id: 899247664
 mas "uBlock Origin Lite", id: 6745342698
-mas "Windows App", id: 1295203466
 mas "WireGuard", id: 1451685025
 mas "Xcode", id: 497799835
 vscode "adamhartford.vscode-base64"
@@ -716,8 +728,10 @@ vscode "hashicorp.terraform"
 vscode "henriiik.vscode-perl"
 vscode "infosec-intern.yara"
 vscode "jacobx1.code-email-pocketknife"
+vscode "jatindotdev.swift-lsp"
 vscode "leathong.openscad-language-support"
 vscode "leighlondon.eml"
+vscode "llvm-vs-code-extensions.lldb-dap"
 vscode "mechatroner.rainbow-csv"
 vscode "michelemelluso.code-beautifier"
 vscode "mkhl.direnv"
@@ -766,6 +780,7 @@ vscode "robbowen.synthwave-vscode"
 vscode "rust-lang.rust-analyzer"
 vscode "skellock.just"
 vscode "splunk.splunk"
+vscode "swiftlang.swift-vscode"
 vscode "tamasfe.even-better-toml"
 vscode "timonwong.shellcheck"
 vscode "twxs.cmake"
@@ -816,16 +831,16 @@ cargo "cherrybomb"
 cargo "clean-big-targets"
 cargo "clippy-sarif"
 cargo "create-tauri-app"
-cargo "cross"
-cargo "crox"
+cargo "cross", source: "https://github.com/cross-rs/cross"
+cargo "crox", source: "https://github.com/rust-lang/measureme"
 cargo "diesel_cli"
 cargo "dprint"
 cargo "du-dust"
 cargo "elf2uf2-rs"
 cargo "espflash"
 cargo "espup"
-cargo "fido-mds-tool"
-cargo "flamegraph"
+cargo "fido-mds-tool", source: "https://github.com/kanidm/webauthn-rs.git?rev=facb3b8"
+cargo "flamegraph", source: "https://github.com/rust-lang/measureme"
 cargo "grcov"
 cargo "kanidm-profiles"
 cargo "kanidm_tools"
@@ -838,6 +853,7 @@ cargo "mdbook-mermaid"
 cargo "mdbook-template"
 cargo "miri"
 cargo "moonlight-rs"
+cargo "openrouter-model-finder"
 cargo "pagefind"
 cargo "python-sweep"
 cargo "ravedude"
@@ -850,7 +866,7 @@ cargo "sea-orm-cli"
 cargo "shrinky-rs"
 cargo "splunk"
 cargo "starship"
-cargo "summarize"
+cargo "summarize", source: "https://github.com/rust-lang/measureme"
 cargo "tauri-cli"
 cargo "timeout-cli"
 cargo "tokei"
@@ -859,11 +875,12 @@ cargo "trunk"
 cargo "twiggy"
 cargo "typos-cli"
 cargo "uv-migrator"
+cargo "vtracer-cli"
 cargo "wasm-bindgen-cli"
 cargo "wasm-opt"
 cargo "wasm-pack"
 cargo "wasm-tools"
-cargo "wasmphobia"
+cargo "wasmphobia", source: "https://github.com/surma/wasmphobia"
 cargo "watchexec-cli"
 cargo "xargo"
 cargo "zizmor"
