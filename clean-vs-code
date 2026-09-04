@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+# this is safe to nuke but might nuke local settings/caches
+# $HOME/Library/Application Support/Code/User/workspaceStorage/*
+
+#  safe to empty
+if [ -d "$HOME/Library/Application Support/Code/User/workspaceStorage" ]; then
+  rm -rf "$HOME/Library/Application Support/Code/User/workspaceStorage"/*
+fi

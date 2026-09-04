@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+
+from urllib.parse import urlencode, urljoin
+
+import click
+import requests
+from pydantic import BaseModel, Field, IPvAnyAddress
+
+BASE_URL = "https://www.speedtest.net/api/js/config-sdk"
+
+
+class Server(BaseModel):
+    id: int
+    name: str
+    sponsor: str | None
+    country: str | None
+    cc: str | None
+    host: str | None
+    url: str | None
+    lat: float | None
+    lon: float | None
+    distance: float | None
+
+
+class Location(BaseModel):
+    latitude: float | None
+    longitude: float | None
+    city_name: str | None = Field(alias="cityName")
+    country_code: str | None = Field(alias="countryCode")
+    country_name: str | None = Field(alias="countryName")
+    region_code: str | None = Field(alias="regionCode")
+    region_name: str | None = Field(alias="regionName")
+
+
+class ResponseData(BaseModel):
+    ip_address: IPvAnyAddress = Field(alias="ipAddress")
+    isp_name: str = Field(alias="ispName")
+    isp_id: int = Field(alias="ispId")
+    location: Location
+
+    servers: list[Server]
+
+
+def do_search(searchterms: str) -> ResponseData:
+    fields = {
+        "engine": "js",
+        "search": searchterms.replace("&", " "),
+        "https_functional": "true",
+        "limit": "100",
+    }
+    searchterms = urlencode(fields)
+
+    url = urljoin(BASE_URL, "?" + searchterms)
+    print(url)
+    response = requests.get(url, timeout=30)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data: {response.status_code}")  # noqa: TRY002
+    response.raise_for_status()
+
+    return ResponseData.model_validate(response.json())
+
+
+@click.command()
+@click.argument("searchterms", nargs=-1)
+def main(searchterms: list[str]) -> None:
+    searchterms_str = " ".join(searchterms)
+    print(do_search(searchterms_str).model_dump_json(indent=4))
+
+
+if __name__ == "__main__":
+    main()
