@@ -51,12 +51,10 @@ def do_search(searchterms: str) -> ResponseData:
     searchterms = urlencode(fields)
 
     url = urljoin(BASE_URL, "?" + searchterms)
-    print(url)
     response = requests.get(url, timeout=30)
     if response.status_code != 200:
         raise Exception(f"Failed to fetch data: {response.status_code}")  # noqa: TRY002
     response.raise_for_status()
-
     return ResponseData.model_validate(response.json())
 
 
