@@ -77,7 +77,7 @@ depends = [
     "cleanup-mise",
     "cleanup-poetry",
 ]
-
+run = ["./clean-codex"]
 
 [tasks.python-ty]
 run = "uv run --all-extras ty check"
@@ -105,7 +105,6 @@ run = "uvx codespell"
 run = "osacompile -o howmanytabsraw howmanytabsraw.applescript"
 
 
-
 [tasks.build-omada-certificate-updater]
 depends = ["test-omada-certificate-updater"]
 dir = "./omada-certificate-updater"
@@ -119,13 +118,8 @@ docker buildx build \
 '''
 
 [tasks.check]
-depends = [
-    "shellcheck",
-    "codespell",
-    "python-check",
-]
+depends = ["shellcheck", "codespell", "python-check"]
 
 [tools]
 shellcheck = "latest"
 uv = "latest"
-
