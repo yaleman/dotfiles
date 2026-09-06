@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-
-
+# the Codex crashpad folder can get pretty big
 TOTAL_MB=$(du -d1 -m -c "$HOME/Library/Application Support/Codex/Crashpad/" | tail -1 | awk '{print $1}')
 OVERSIZE=1024
 if [ "$TOTAL_MB" -gt "$OVERSIZE" ]; then
