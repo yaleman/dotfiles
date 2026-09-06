@@ -1,0 +1,11 @@
+#!/bin/bash
+
+CACHE_SIZE=$(uv cache size --output-format machine --preview-features cache-size)
+CACHE_IS_CHONKY=1073741824
+
+if [ "$CACHE_SIZE" -gt ${CACHE_IS_CHONKY} ]; then
+  echo "Cache size is greater than $CACHE_IS_CHONKY: $CACHE_SIZE"
+  uv cache prune
+else
+  echo "Cache size is $CACHE_IS_CHONKY or less: $CACHE_SIZE"
+fi
