@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 import click
-from PyPDF2 import PasswordType, PdfReader, PdfWriter
+from pypdf import PasswordType, PdfReader, PdfWriter
 
 
 @click.command()
