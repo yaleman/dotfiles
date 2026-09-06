@@ -8,14 +8,16 @@ run = "go clean -modcache"
 
 [tasks.cleanup-docker]
 description = "Clean docker cache"
-run = '''
-docker system prune --all --force --volumes || true
-docker system prune --all --force || true
-'''
+run = [
+    "docker system prune --all --force --volumes || true",
+    "docker system prune --all --force || true",
+    "docker buildx prune --all --force || true",
+    "docker buildx history rm --all || true",
+]
 
 [tasks.cleanup-uv]
 description = "Clean uv cache"
-run = "uv cache clean"
+run = "./clean-uv"
 
 [tasks.cleanup-brew]
 description = "Clean brew cache"
@@ -36,8 +38,8 @@ run = [
     "fd --type d __pycache__  $HOME/Projects --no-ignore --exec-batch rm -rf",
 ]
 
-[tasks.cleanup-swift]
-run = ["cleanup-xcode.sh $HOME/Projects"]
+[tasks.cleanup-xcode]
+run = ["cleanup-xcode.sh"]
 
 [tasks.cleanup-venvs]
 description = "Clean venvs"
@@ -76,6 +78,7 @@ depends = [
     "cleanup-venvs",
     "cleanup-mise",
     "cleanup-poetry",
+    "cleanup-xcode",
 ]
 run = ["./clean-codex"]
 
