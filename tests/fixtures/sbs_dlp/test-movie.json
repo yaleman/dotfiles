@@ -1,0 +1,675 @@
+[
+    {
+        "_1": 2,
+        "_316": -5,
+        "_317": -5
+    },
+    "loaderData",
+    {
+        "_3": 4,
+        "_14": 15
+    },
+    "root",
+    {
+        "_5": 6,
+        "_7": 6,
+        "_8": 6,
+        "_9": 6,
+        "_10": 6,
+        "_11": 12,
+        "_13": 6
+    },
+    "DISABLE_LIVE_RESTART_CTA_FOR_CHROMECAST",
+    "true",
+    "ENABLE_DETAILS_PAGE_PREVIEW",
+    "ENABLE_LIVE_RESTART",
+    "ENABLE_LIVE_RESTART_CTA",
+    "ENABLE_PREVIEW_PLAYER",
+    "REWIND_PROMO_DATES",
+    "2025-12-01T00:01:00|2026-02-01T23:59:00",
+    "SHOW_NEWSLETTER_PROMO_BLOCK",
+    "routes/movie",
+    {
+        "_16": 17,
+        "_31": 312,
+        "_35": 313,
+        "_33": 34,
+        "_74": 309,
+        "_314": 315
+    },
+    "dehydratedState",
+    {
+        "_18": 19,
+        "_20": 21
+    },
+    "mutations",
+    [],
+    "queries",
+    [
+        22
+    ],
+    {
+        "_23": 24,
+        "_306": 307,
+        "_310": 311
+    },
+    "state",
+    {
+        "_25": 26,
+        "_290": 291,
+        "_292": 293,
+        "_294": -5,
+        "_295": 296,
+        "_297": 296,
+        "_298": 296,
+        "_299": -5,
+        "_300": -5,
+        "_301": 40,
+        "_302": 303,
+        "_304": 305
+    },
+    "data",
+    {
+        "_27": 28,
+        "_29": 30,
+        "_31": 32,
+        "_33": 34,
+        "_35": 36,
+        "_37": 38,
+        "_39": 40,
+        "_41": 42,
+        "_47": 48,
+        "_51": 52,
+        "_53": 54,
+        "_58": 59,
+        "_63": 64,
+        "_65": 66,
+        "_68": 69,
+        "_71": 72,
+        "_77": 78,
+        "_114": 115,
+        "_185": 186,
+        "_187": 188,
+        "_189": 190,
+        "_207": 208,
+        "_209": 210,
+        "_234": 235,
+        "_236": 237,
+        "_239": 240,
+        "_244": 245,
+        "_246": 247,
+        "_248": 249,
+        "_252": 253,
+        "_255": 32,
+        "_256": 257,
+        "_258": 259
+    },
+    "id",
+    "d9e01b4e-28fd-4ca1-b663-fce13428d518",
+    "entityType",
+    "MOVIE",
+    "title",
+    "Test Movie",
+    "slug",
+    "test-movie",
+    "description",
+    "This is a test movie",
+    "duration",
+    "PT2H39M30S",
+    "hasAudioDescription",
+    false,
+    "availability",
+    {
+        "_43": 44,
+        "_45": 46
+    },
+    "start",
+    "2026-09-03T16:00:00Z",
+    "end",
+    "2027-08-31T13:59:59Z",
+    "genres",
+    [
+        49,
+        50
+    ],
+    "Drama",
+    "Thriller",
+    "classificationID",
+    "MA15+",
+    "consumerAdvices",
+    [
+        55,
+        56,
+        57
+    ],
+    "A",
+    "L",
+    "V",
+    "consumerAdviceTexts",
+    [
+        60,
+        61,
+        62
+    ],
+    "Strong Adult Themes",
+    "Strong Coarse Language",
+    "Strong Violence",
+    "releaseYear",
+    2026,
+    "countries",
+    [
+        67
+    ],
+    "Australia",
+    "languages",
+    [
+        70
+    ],
+    "English",
+    "textTracks",
+    [
+        73
+    ],
+    {
+        "_74": 70,
+        "_75": 76
+    },
+    "language",
+    "type",
+    "CAPTION",
+    "casts",
+    [
+        79,
+        86,
+        90,
+        94,
+        98,
+        102,
+        106,
+        110
+    ],
+    {
+        "_27": 80,
+        "_81": 82,
+        "_33": 83,
+        "_84": 85
+    },
+    "bb20bcc9-f011-5263-a7fb-0a1cbe1bfe94",
+    "name",
+    "Guy Pearce",
+    "guy-pearce-bb20bcc9",
+    "role",
+    "Actor",
+    {
+        "_27": 87,
+        "_81": 88,
+        "_33": 89,
+        "_84": 85
+    },
+    "a1948e75-e208-57a0-b293-4c5c716e55d3",
+    "Cosmo Jarvis",
+    "cosmo-jarvis-a1948e75",
+    {
+        "_27": 91,
+        "_81": 92,
+        "_33": 93,
+        "_84": 85
+    },
+    "4d1b6015-4d3e-5a58-ae62-05e0a72934fb",
+    "Vincent Miller",
+    "vincent-miller-4d1b6015",
+    {
+        "_27": 95,
+        "_81": 96,
+        "_33": 97,
+        "_84": 85
+    },
+    "7e4dc5d2-57b4-57cc-9294-764b2677a0d5",
+    "Toby Wallace",
+    "toby-wallace-7e4dc5d2",
+    {
+        "_27": 99,
+        "_81": 100,
+        "_33": 101,
+        "_84": 85
+    },
+    "cb9fd34b-5f8d-5670-9541-24551ecf2b54",
+    "Chloe Hayden",
+    "chloe-hayden-cb9fd34b",
+    {
+        "_27": 103,
+        "_81": 104,
+        "_33": 105,
+        "_84": 85
+    },
+    "bb106bc7-613c-5978-b07f-aefd9d514fce",
+    "Michael Logo",
+    "michael-logo-bb106bc7",
+    {
+        "_27": 107,
+        "_81": 108,
+        "_33": 109,
+        "_84": 85
+    },
+    "cacc2575-26d5-5a3c-889c-f8906b0011d3",
+    "Raif Weaver",
+    "raif-weaver-cacc2575",
+    {
+        "_27": 111,
+        "_81": 112,
+        "_33": 113,
+        "_84": 85
+    },
+    "7c5f9c49-a759-5dfc-bf37-7ebe9dced30e",
+    "Clarke Parkinson",
+    "clarke-parkinson-7c5f9c49",
+    "crews",
+    [
+        116,
+        121,
+        123,
+        128,
+        132,
+        137,
+        141,
+        146,
+        151,
+        156,
+        161,
+        166,
+        171,
+        176,
+        181
+    ],
+    {
+        "_27": 117,
+        "_81": 118,
+        "_33": 119,
+        "_84": 120
+    },
+    "f018889e-0150-53a2-bd23-5e9feae92254",
+    "Charles Williams",
+    "charles-williams-f018889e",
+    "Director",
+    {
+        "_27": 117,
+        "_81": 118,
+        "_33": 119,
+        "_84": 122
+    },
+    "Screenwriter",
+    {
+        "_27": 124,
+        "_81": 125,
+        "_33": 126,
+        "_84": 127
+    },
+    "7b07e256-5098-5873-9470-9c41227f637d",
+    "Kate Glover",
+    "kate-glover-7b07e256",
+    "Producer",
+    {
+        "_27": 129,
+        "_81": 130,
+        "_33": 131,
+        "_84": 127
+    },
+    "3d5010ee-ecb4-5eb7-a772-3f81366f4b20",
+    "Marian Macgowan",
+    "marian-macgowan-3d5010ee",
+    {
+        "_27": 133,
+        "_81": 134,
+        "_33": 135,
+        "_84": 136
+    },
+    "7a471639-bb8c-52aa-be12-0aa3ea6419f9",
+    "Francis Chapman",
+    "francis-chapman-7a471639",
+    "Executive Producer",
+    {
+        "_27": 138,
+        "_81": 139,
+        "_33": 140,
+        "_84": 136
+    },
+    "154e0b8c-329c-5c12-a2a5-fe61d643ab91",
+    "Nick Farnell",
+    "nick-farnell-154e0b8c",
+    {
+        "_27": 142,
+        "_81": 143,
+        "_33": 144,
+        "_84": 145
+    },
+    "f51b37dc-7498-58c8-ba15-650514c272cb",
+    "Andrew Commis",
+    "andrew-commis-f51b37dc",
+    "Cinematography",
+    {
+        "_27": 147,
+        "_81": 148,
+        "_33": 149,
+        "_84": 150
+    },
+    "98bfeef0-e00a-5067-a227-b13ced8d51b9",
+    "Dan Lee",
+    "dan-lee-98bfeef0",
+    "Film Editing",
+    {
+        "_27": 152,
+        "_81": 153,
+        "_33": 154,
+        "_84": 155
+    },
+    "bf5297f6-ae59-5b42-90a9-a1f2b5fb7b54",
+    "Chiara Costanza",
+    "chiara-costanza-bf5297f6",
+    "Original Music",
+    {
+        "_27": 157,
+        "_81": 158,
+        "_33": 159,
+        "_84": 160
+    },
+    "e187e272-b158-5902-80c8-6eb7aec5d8cc",
+    "Leah Popple",
+    "leah-popple-e187e272",
+    "Production Design",
+    {
+        "_27": 162,
+        "_81": 163,
+        "_33": 164,
+        "_84": 165
+    },
+    "a19e1946-6ae3-505c-b344-0328865e4c8d",
+    "Sam Jamieson",
+    "sam-jamieson-a19e1946",
+    "Art Direction",
+    {
+        "_27": 167,
+        "_81": 168,
+        "_33": 169,
+        "_84": 170
+    },
+    "8e59eab8-3caa-552e-87f2-96fd25298fb8",
+    "Quinn Delany-Veldhuis",
+    "quinn-delany-veldhuis-8e59eab8",
+    "Set Decoration",
+    {
+        "_27": 172,
+        "_81": 173,
+        "_33": 174,
+        "_84": 175
+    },
+    "6081d1f2-5c24-5191-b15b-43d2cd612717",
+    "Zohie Castellano",
+    "zohie-castellano-6081d1f2",
+    "Costume Design",
+    {
+        "_27": 177,
+        "_81": 178,
+        "_33": 179,
+        "_84": 180
+    },
+    "29a2cb49-0cc5-58e6-ba60-f0fd4b2721a4",
+    "Nikki Barrett",
+    "nikki-barrett-29a2cb49",
+    "Casting",
+    {
+        "_27": 182,
+        "_81": 183,
+        "_33": 184,
+        "_84": 180
+    },
+    "9fa0fc3a-a861-5cbe-b08c-68056aa62b55",
+    "Natalie Wall",
+    "natalie-wall-9fa0fc3a",
+    "mpxMediaID",
+    2511031875527,
+    "trackingID",
+    "817708",
+    "images",
+    [
+        191,
+        195,
+        198,
+        201,
+        204
+    ],
+    {
+        "_27": 192,
+        "_193": 194
+    },
+    "a8ce3672-2b49-5b60-8b80-2e3c6aebd84b",
+    "category",
+    "16:9|1920|1080|BANNER",
+    {
+        "_27": 196,
+        "_193": 197
+    },
+    "1ee48614-cff4-5558-a3ac-3a579ab21ef3",
+    "16:9|1920|1080|KEY_ART",
+    {
+        "_27": 199,
+        "_193": 200
+    },
+    "0b58480e-b476-554b-ba04-ccbe98ce5751",
+    "1:1|1400|1400|MASK",
+    {
+        "_27": 202,
+        "_193": 203
+    },
+    "71616d39-07c5-5098-9382-9f742dfdaad6",
+    "2:3|960|1440|BANNER",
+    {
+        "_27": 205,
+        "_193": 206
+    },
+    "fe6d9266-2ffe-586b-8a9f-ede1f1ac0ba2",
+    "2:3|960|1440|KEY_ART",
+    "audioIntroductions",
+    [],
+    "trailers",
+    [
+        211
+    ],
+    {
+        "_27": 212,
+        "_29": 213,
+        "_193": 214,
+        "_31": 215,
+        "_35": 216,
+        "_37": 217,
+        "_41": 218,
+        "_185": 221,
+        "_189": 222
+    },
+    "8c41b774-260e-55b6-887d-2cbc371fae40",
+    "CLIP",
+    "TRAILER|MAIN",
+    "Test Movie | Movie Trailer",
+    "",
+    "PT1M59S",
+    {
+        "_43": 219,
+        "_45": 220
+    },
+    "2026-09-03T14:00:00Z",
+    "2031-01-02T13:01:00Z",
+    2511444547729,
+    [
+        223,
+        225,
+        227,
+        230,
+        232
+    ],
+    {
+        "_27": 224,
+        "_193": 194
+    },
+    "81c601ad-5ea3-5667-a525-9dabbb3e6f48",
+    {
+        "_27": 226,
+        "_193": 197
+    },
+    "177b7191-8148-5064-89b1-eedb794509d9",
+    {
+        "_27": 228,
+        "_193": 229
+    },
+    "9e5a058f-5822-571e-a805-5a187d2fa592",
+    "1:1|700|700|MASK",
+    {
+        "_27": 231,
+        "_193": 203
+    },
+    "09543c74-f1b3-53e1-83b0-6a25e5cbc1a4",
+    {
+        "_27": 233,
+        "_193": 206
+    },
+    "358ca5d8-b568-5223-9d08-415c2a7a0a47",
+    "extras",
+    [],
+    "channels",
+    [
+        238
+    ],
+    "On Demand",
+    "distributors",
+    [
+        241
+    ],
+    {
+        "_27": 242,
+        "_81": 243
+    },
+    "17576",
+    "Bonsai Films Pty Ltd",
+    "sponsorships",
+    [],
+    "ibmsTitleID",
+    817708,
+    "preview",
+    {
+        "_250": 251,
+        "_185": 221
+    },
+    "url",
+    "https://sbs-vod-prod-01.akamaized.net/Content/HLS_TSO/VOD/geo/11981/17736/971c478f-6df7-4124-ad07-62c57a8d4bb4/725bcfae-5840-d821-9578-fbdbd41a4da2/master.m3u8?hdnea=st%3D1788599079~exp%3D1788600879~acl%3D%2FContent%2FHLS_TSO%2FVOD%2Fgeo%2F11981%2F17736%2F971c478f-6df7-4124-ad07-62c57a8d4bb4%2F725bcfae-5840-d821-9578-fbdbd41a4da2%2F%2A~hmac%3D6be49163aa17c3d614dfe1d661e8b88a3d1ca9e6e58d965ca80dbe0568a9e55a",
+    "directors",
+    [
+        254
+    ],
+    {
+        "_27": 117,
+        "_81": 118,
+        "_33": 119,
+        "_84": 120
+    },
+    "cdpTitle",
+    "isHighDefinition",
+    true,
+    "adobeMediaObject",
+    {
+        "_260": 261,
+        "_262": 188,
+        "_263": 264,
+        "_265": 28,
+        "_266": 216,
+        "_267": 268
+    },
+    "mpxId",
+    "2511031875527",
+    "pilatId",
+    "mediaType",
+    "video",
+    "entityId",
+    "parentEntityId",
+    "videoDetails",
+    {
+        "_31": 32,
+        "_269": 52,
+        "_270": 271,
+        "_272": 273,
+        "_274": 275,
+        "_276": 277,
+        "_278": 279,
+        "_280": 281,
+        "_74": 282,
+        "_29": 30,
+        "_283": 216,
+        "_284": 40,
+        "_285": 286
+    },
+    "classification",
+    "collection",
+    [],
+    "contentType",
+    "movie",
+    "channel",
+    [
+        238
+    ],
+    "country",
+    [
+        67
+    ],
+    "genre",
+    [
+        49
+    ],
+    "subgenre",
+    [
+        50
+    ],
+    [
+        70
+    ],
+    "parentEntityType",
+    "isLive",
+    "episodeDetails",
+    {
+        "_287": 216,
+        "_288": 216,
+        "_289": 216
+    },
+    "seriesTitle",
+    "episodeNumber",
+    "seasonNumber",
+    "dataUpdateCount",
+    1,
+    "dataUpdatedAt",
+    1788599084717,
+    "error",
+    "errorUpdateCount",
+    0,
+    "errorUpdatedAt",
+    "fetchFailureCount",
+    "fetchFailureReason",
+    "fetchMeta",
+    "isInvalidated",
+    "status",
+    "success",
+    "fetchStatus",
+    "idle",
+    "queryKey",
+    [
+        273,
+        308,
+        34,
+        309
+    ],
+    "get",
+    "en",
+    "queryHash",
+    "[\"movie\",\"get\",\"inside\",\"en\"]",
+    "Watch Test Movie",
+    "Watch Test Movie for free with SBS On Demand, your ultimate destination for diverse entertainment. Stream now!",
+    "imageUrl",
+    "https://image.pr.sbsod.com/96569412-ee80-403f-9756-7c3b84fa36e0?width=1280&height=720&type=webp&quality=75&crop=true",
+    "actionData",
+    "errors"
+]

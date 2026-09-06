@@ -50,11 +50,11 @@ class EpisodeMetadata:
     episode_url: str
     mpx_media_id: int
     series_slug: str
-    season_slug: str
-    episode_slug: str
-    season_number: int
-    episode_number: int
     title: str
+    season_slug: str | None = None
+    episode_slug: str | None = None
+    season_number: int | None = None
+    episode_number: int | None = None
 
 
 class CacheUrl:
@@ -213,6 +213,65 @@ def episode_metadata(episode: dict[str, Any], season: dict[str, Any]) -> Episode
     )
 
 
+def build_movie_url(slug: str, mpx_media_id: int) -> str:
+    return f"https://www.sbs.com.au/ondemand/movie/{slug}/{mpx_media_id}"
+
+
+def movie_metadata(movie: dict[str, Any]) -> EpisodeMetadata:
+    slug = str(movie["slug"])
+    mpx_media_id = int(movie["mpxMediaID"])
+    return EpisodeMetadata(
+        episode_url=build_movie_url(slug, mpx_media_id),
+        mpx_media_id=mpx_media_id,
+        series_slug=slug,
+        title=str(movie["title"]),
+    )
+
+
+def _collect_movie_candidates(payload: list[Any]) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+
+    def scan(node: Any) -> None:
+        if isinstance(node, dict):
+            if "mpxMediaID" in node and "slug" in node:
+                media_id = int(node["mpxMediaID"])
+                if media_id not in seen_ids:
+                    seen_ids.add(media_id)
+                    candidates.append(node)
+                return
+            for value in node.values():
+                scan(value)
+        elif isinstance(node, list):
+            for item in node:
+                scan(item)
+
+    for index in range(len(payload)):
+        scan(decode_node(index, payload))
+    return candidates
+
+
+def extract_movie_metadata(payload: list[Any], url: str) -> list[EpisodeMetadata]:
+    candidates = _collect_movie_candidates(payload)
+    if not candidates:
+        return []
+    if len(candidates) == 1:
+        return [movie_metadata(candidates[0])]
+
+    url_id = url.rstrip("/").rsplit("/", 1)[-1]
+    if url_id.isdigit():
+        id_matches = [m for m in candidates if int(m["mpxMediaID"]) == int(url_id)]
+        if id_matches:
+            return [movie_metadata(id_matches[0])]
+
+    url_slug = url.rstrip("/").rsplit("/", 2)[-2] if "/" in url.rstrip("/") else ""
+    slug_matches = [m for m in candidates if str(m.get("slug", "")) == url_slug]
+    if slug_matches:
+        return [movie_metadata(slug_matches[0])]
+
+    return [movie_metadata(candidates[0])]
+
+
 def extract_episode_metadata(payload: list[Any]) -> list[EpisodeMetadata]:
     episodes: list[EpisodeMetadata] = []
     for season in decode_seasons(payload):
@@ -356,10 +415,15 @@ def main(
 
     response = CacheUrl(url)
     payload = extract_json(response.read_text())
-    episodes = extract_episode_metadata(payload)
+    try:
+        episodes = extract_episode_metadata(payload)
+    except ValueError:
+        episodes = []
+    if not episodes:
+        episodes = extract_movie_metadata(payload, url)
 
     if not episodes:
-        logger.error("No episodes found in decoded SBS payload")
+        logger.error("No content found in decoded SBS payload")
         raise SystemExit(1)
 
     if download:
@@ -384,6 +448,7 @@ __all__ = [
     "EpisodeMetadata",
     "ExistingDirectory",
     "build_episode_url",
+    "build_movie_url",
     "build_watch_url",
     "decode_key",
     "decode_node",
@@ -393,6 +458,7 @@ __all__ = [
     "download_episodes",
     "extract_episode_metadata",
     "extract_json",
+    "extract_movie_metadata",
     "extract_payload_text",
     "find_collection_refs",
     "main",

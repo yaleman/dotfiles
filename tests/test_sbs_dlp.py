@@ -12,6 +12,7 @@ FIXTURE_URLS = {
     "shoresy": "https://www.sbs.com.au/ondemand/tv-series/shoresy",
     "catch_22": "https://www.sbs.com.au/ondemand/tv-series/catch-22",
     "once_upon_a_time_in_space": "https://www.sbs.com.au/ondemand/tv-series/once-upon-a-time-in-space",
+    "test-movie": "https://www.sbs.com.au/ondemand/movie/test-movie/2511031875527",
 }
 
 
@@ -49,7 +50,9 @@ def test_episode_metadata_contains_stable_fields(name: str) -> None:
     assert episode.season_slug
     assert episode.episode_slug
     assert episode.mpx_media_id > 0
+    assert episode.season_number is not None
     assert episode.season_number > 0
+    assert episode.episode_number is not None
     assert episode.episode_number > 0
     assert episode.title
 
@@ -90,6 +93,62 @@ def test_episode_urls_match_sbs_route_shape(name: str, expected_url: str) -> Non
     episode = sbs_dlp.extract_episode_metadata(payload)[0]
 
     assert episode.episode_url == expected_url
+
+
+def test_extract_movie_metadata() -> None:
+    payload = load_payload("test-movie")
+
+    movies = sbs_dlp.extract_movie_metadata(payload, FIXTURE_URLS["test-movie"])
+
+    assert len(movies) == 1
+    movie = movies[0]
+    assert movie.episode_url == "https://www.sbs.com.au/ondemand/movie/test-movie/2511031875527"
+    assert movie.mpx_media_id == 2511031875527
+    assert movie.series_slug == "test-movie"
+    assert movie.title == "Test Movie"
+    assert movie.season_slug is None
+    assert movie.episode_slug is None
+    assert movie.season_number is None
+    assert movie.episode_number is None
+
+
+def test_cli_movie_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = load_payload("test-movie")
+    runner = CliRunner()
+
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+
+    result = runner.invoke(sbs_dlp.main, [FIXTURE_URLS["test-movie"]])
+
+    assert result.exit_code == 0
+    lines = [line for line in result.output.strip().splitlines() if line]
+    assert lines == ["https://www.sbs.com.au/ondemand/movie/test-movie/2511031875527"]
+
+
+def test_cli_movie_json_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = load_payload("test-movie")
+    runner = CliRunner()
+
+    monkeypatch.setattr(sbs_dlp, "CacheUrl", FakeCacheUrl)
+    monkeypatch.setattr(sbs_dlp, "extract_json", lambda _: payload)
+
+    result = runner.invoke(sbs_dlp.main, ["--json", FIXTURE_URLS["test-movie"]])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data == [
+        {
+            "episode_url": "https://www.sbs.com.au/ondemand/movie/test-movie/2511031875527",
+            "mpx_media_id": 2511031875527,
+            "series_slug": "test-movie",
+            "title": "Test Movie",
+            "season_slug": None,
+            "episode_slug": None,
+            "season_number": None,
+            "episode_number": None,
+        }
+    ]
 
 
 class FakeCacheUrl:
