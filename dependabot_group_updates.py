@@ -22,7 +22,7 @@ def _ecosystem_group_name(ecosystem: str) -> str:
 
 
 def _ensure_update_groups(update: dict[str, Any]) -> bool:
-    ecosystem = update.get("package-ecosystem")
+    ecosystem: str | None = update.get("package-ecosystem")
     if not isinstance(ecosystem, str) or not ecosystem.strip():
         raise click.ClickException("Each Dependabot update entry must define a package-ecosystem.")
 
@@ -69,12 +69,33 @@ def load_config(path: Path) -> dict[str, Any]:
 
 
 def write_config(path: Path, config: dict[str, Any]) -> None:
+    _changed, config = check_time_format(config)
     rendered = yaml.safe_dump(
         config,
         sort_keys=False,
         default_flow_style=False,
     )
     path.write_text(rendered, encoding="utf-8")
+
+
+def check_time_format(config: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """ensures that the time field is in string format because YAML is dumb and dependabot is picky"""
+    changed = False
+    updates = []
+    for update in config.get("updates", []):
+        if not isinstance(update, dict):
+            raise click.ClickException("Each Dependabot update entry must be a mapping.")
+        schedule = update.get("schedule")
+        if not isinstance(schedule, dict):
+            raise click.ClickException("Dependabot update schedule must be a mapping.")
+        time = schedule.get("time")
+        if time is not None and not isinstance(time, str):
+            update["schedule"]["time"] = str(time)
+            changed = True
+        updates.append(update)
+    if changed:
+        config["updates"] = updates
+    return (changed, config)
 
 
 @click.command()
