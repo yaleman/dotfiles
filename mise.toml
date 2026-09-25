@@ -1,3 +1,10 @@
+[env]
+_.file = { path = ".envrc", redact = false }
+
+[tools]
+shellcheck = "latest"
+uv = "latest"
+
 [tasks.clear-trivy-cache]
 description = "Clear trivy cache"
 run = "rm -rf $HOME/.cache/trivy || true"
@@ -123,6 +130,6 @@ docker buildx build \
 [tasks.check]
 depends = ["shellcheck", "codespell", "python-check"]
 
-[tools]
-shellcheck = "latest"
-uv = "latest"
+[tasks.keychain-secret-compile]
+run = "swiftc keychain-secret.swift"
+description = "Compile the keychain-secret.swift source file to keychain-secret"

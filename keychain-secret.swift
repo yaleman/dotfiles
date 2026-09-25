@@ -159,7 +159,7 @@ private func setSecret(name: String) {
     }
 }
 
-private func getSecret(name: String) {
+private func getSecret(name: String, base64: Bool) {
     var search = query(for: name)
 
     search[kSecReturnData as String] = true
@@ -187,7 +187,11 @@ private func getSecret(name: String) {
         die("Keychain returned something that wasn't Data")
     }
 
-    FileHandle.standardOutput.write(data)
+    if base64 {
+        FileHandle.standardOutput.write(Data(data.base64EncodedString().utf8))
+    } else {
+        FileHandle.standardOutput.write(data)
+    }
 }
 
 private func listSecrets() {
@@ -253,7 +257,7 @@ private func usage() -> Never {
             """
             Usage:
               \(program) set NAME
-              \(program) get NAME
+              \(program) get (--base64) NAME
               \(program) list
               \(program) delete NAME
               \(program) migrate - migrate secrets from original to current format
@@ -269,7 +273,8 @@ private func usage() -> Never {
               printf '%s' "$TOKEN" | \(program) set GITHUB_TOKEN
               pbpaste | \(program) set GITHUB_TOKEN
 
-            get writes only the raw secret to stdout:
+            get writes the raw secret to stdout by default, 
+            with an optional --base64 flag for encoding output
 
               export GITHUB_TOKEN="$(\(program) get GITHUB_TOKEN)"
 
@@ -278,37 +283,50 @@ private func usage() -> Never {
     exit(64)
 }
 
-guard CommandLine.arguments.count >= 2 else {
+var args = CommandLine.arguments
+var base64_it = false
+
+if let base64_index = args.firstIndex(of: "--base64") {
+    base64_it = true
+    let res = args.remove(at: base64_index)
+}
+//FileHandle.standardError.write(Data("base64 it: \(base64_it)\n".utf8))
+
+guard args.count >= 2 else {
     usage()
 }
 
-let command = CommandLine.arguments[1]
+let command = args[1]
+//FileHandle.standardError.write(Data("command: \(command)\n".utf8))
 
 switch command {
 case "set":
-    guard CommandLine.arguments.count == 3 else { usage() }
-    let name = CommandLine.arguments[2]
+    guard args.count == 3 else { usage() }
+    let name = args[args.count-1]
     guard !name.isEmpty else { die("secret name cannot be empty") }
     setSecret(name: name)
 
 case "get":
-    guard CommandLine.arguments.count == 3 else { usage() }
-    let name = CommandLine.arguments[2]
+    guard args.count >= 3 else { usage() }
+
+    let name = args[args.count - 1]
     guard !name.isEmpty else { die("secret name cannot be empty") }
-    getSecret(name: name)
+
+    getSecret(name: name, base64: base64_it)
 
 case "list":
-    guard CommandLine.arguments.count == 2 else { usage() }
+    guard args.count == 2 else { usage() }
     listSecrets()
 
 case "delete", "rm":
-    guard CommandLine.arguments.count == 3 else { usage() }
-    let name = CommandLine.arguments[2]
+    guard args.count == 3 else { usage() }
+    let name = args[args.count-1]
     guard !name.isEmpty else { die("secret name cannot be empty") }
     deleteSecret(name: name)
 case "migrate":
-    guard CommandLine.arguments.count == 2 else { usage() }
+    guard args.count == 2 else { usage() }
     migrateSecret()
 default:
+    FileHandle.standardError.write(Data("Invalid command: \(command)\n".utf8))
     usage()
 }
