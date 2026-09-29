@@ -56,7 +56,7 @@ venv-cleaner "$HOME/Projects" --delete
 
 [tasks.cleanup-mise]
 description = "Clean mise cache and runs prune"
-run = ["mise cache clear", "mise prune"]
+run = ["mise cache clear", "mise prune --yes"]
 
 [tasks.cleanup-poetry]
 description = "Clean poetry cache"
