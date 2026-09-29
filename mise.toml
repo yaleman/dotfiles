@@ -2,6 +2,7 @@
 _.file = { path = ".envrc", redact = false }
 
 [tools]
+biome = "latest"
 shellcheck = "latest"
 uv = "latest"
 
