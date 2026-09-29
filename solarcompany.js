@@ -1,3 +1,12 @@
+monkeyrunner.cancel()
+
+
+// function dumper
+
+// Object.getOwnPropertyNames(window)
+//   .filter(x => x.toLowerCase().endsWith("ps"))
+//   .join("\n")
+
 // Number.parseFloat(Game.tech.getTechData('efficiencyResearch').getCostElement().text().replace(",",""))
 
 var monkeyrunner = {
@@ -32,27 +41,33 @@ var automonkey = {
 
     run() {
         this.tabText(`Running at ${new Date().toLocaleTimeString()} ...`);
-        if (dyson < 250) {
+        if (ring < 3 && dyson >=50) {
+            buildRing();
+        } else if (dyson < 250) {
             // console.log("Dyson is below 250, getting more Dyson...");
             getDyson();
         } else {
             window.alert("250 Dyson!");
         }
 
-        this.powerSupplythings();
+        this.powerSupplythings(this);
         this.buyScience();
         this.buildLabs(this);
         this.upgradeStorage(this);
-
         this.buildPower();
         rebuildCommsWonder();
         rebuildStargate();
         rebuildRocketWonder();
         rebuildAntimatterWonder();
         activatePortal();
-        this.buildThings(this);
 
-        this.tabText(`Sleeping at ${new Date().toLocaleTimeString()} ...`);
+        if (energyps > this.powerWanted / 10) {
+            this.buildThings(this);
+        }
+
+        this.buildPlasma();
+
+        this.tabText(`Sleeping at ${new Date().toLocaleTimeString()} ... Started at ${this.startDate.toLocaleTimeString()}`);
     },
 
     buyScience() {
@@ -69,6 +84,12 @@ var automonkey = {
     buildThing(func) {
         if (eval(`${func}()`)) {
             this.message(`Built ${func}`);
+        }
+    },
+
+    buildPlasma() {
+        if (energyps > this.powerWanted*0.75) {
+            getPlasmatic();
         }
     },
 
@@ -95,17 +116,42 @@ var automonkey = {
         this.buildThing("getLab");
     },
 
-    powerSupplythings() {
-        const psHeadroom = Math.max(this.itemHeadroom / 4, 0);
+    powerSupplythings(self) {
+        const psHeadroom = Math.max(this.itemHeadroom, 0);
         if (lavaps < psHeadroom) {
+            console.debug("Need more lava");
             getVeluptuator();
             getExtruder();
         }
         if (uraniumps < psHeadroom) {
+            console.debug("Need more uranium");
             getRecycler();
             getCubic();
             getGrinder();
         }
+        if (methaneps < psHeadroom) {
+            console.debug("Need more methane");
+            self.buildMethane(self);
+        }
+        if (charcoalps < psHeadroom) {
+            console.debug("Need more charcoal");
+            self.buildCharcoal(self);
+        }
+    },
+
+
+    buildMethane(self) {
+        self.buildThing("getVent");
+        self.buildThing("getSuctionExcavator");
+        self.buildThing("getSpaceCow");
+        self.buildThing("getVacuum");
+    },
+
+    buildCharcoal(self) {
+        self.buildThing("getFryer");
+        self.buildThing("getKiln");
+        self.buildThing("getFurnace");
+        self.buildThing("getWoodburner");
     },
 
     buildThings(self) {
@@ -114,6 +160,19 @@ var automonkey = {
         self.buildThing("getMoonQuarry");
         self.buildThing("getMoonDrill");
         self.buildThing("getMoonWorker");
+
+        // metal
+        self.buildThing("getQuantumDrill");
+        self.buildThing("getGigaDrill");
+        self.buildThing("getHeavyDrill");
+        self.buildThing("getMiner");
+
+        // oil
+        self.buildThing("getOilRig");
+        self.buildThing("getOilField");
+        self.buildThing("getPumpjack");
+        self.buildThing("getPump");
+
 
         // titanium
         self.buildThing("getTitanDrill");
@@ -140,80 +199,73 @@ var automonkey = {
         self.buildThing("getAdvancedDrill");
         self.buildThing("getGemMiner");
 
-        // getActuator();
+        // silver
+        // self.buildThing("getCannon");
+        // self.buildThing("getBertha");
+        // self.buildThing("getSpaceLaser");
+        self.buildThing("getScout");
+
+        // gold
+        // self.buildThing("getActuator");
+        // self.buildThing("getDeathStar");
+        // self.buildThing("getDestroyer");
+        self.buildThing("getDroid");
+
+        // methane
+        self.buildMethane(self);
+
+        // helium
+        // getSkimmer();
+        // getCompressor();
+        // getTanker();
+        self.buildThing("getDrone");
+
         // getAnnihilator();
         // getBath()
-        // getBertha();
         // getBlowtorch();
         // getCage()
-        // getCannon();
         // getChemicalPlant();
         // getCloner();
         // getClub();
         // getCollector();
-        // getCompressor();
         // getCondensator();
         // getCrucible();
 
-        // getDeathStar();
         // getDesert();
-        // getDestroyer();
         // getDiamondChamber();
-        // getDroid();
-        // getDrone();
         // getECell();
         // getExtractor();
         // getForest();
         // getFossilator();
-        // getFryer();
-        // getFurnace();
-        // ();
-        // getGigaDrill();
 
         // getHarvester();
         // getHeater();
-        // getHeavyDrill();
         // getHindenburg();
         // getHydrazine();
         // getInterCow();
-        // getKiln();
+
         // getMagnet();
         // getMaxEnergy();
         // getMaxPlasma();
         // getMicroPollutor();
-        // getMiner();
         // getMultiDrill();
         // getNebulous();
-        // getOilField();
-        // getOilRig();
         // getOverexchange();
         // getOxidisation();
         // getPhilosopher();
         // getPlanetNuke();
-        // getPlasmatic();
         // getPrinter();
         // getProduction();
         // getPSUT2();
         // getPSU();
-        // getPump();
-        // getPumpjack();
-        // getQuantumDrill();
         // getResource();
         // getResourceAfterTick();
         // getRocket();
         // getScorcher();
-        // getScout();
-        // getSkimmer();
         // getSmasher();
-        // getSpaceCow();
-        // getSpaceLaser();
         // getStorage();
-        // getSuctionExcavator();
-        // getTanker();
         // getTardis();
-        // getVacuum();
         // getVeluptuator();
-        // getVent();
         // getWeb();
         // getWerewolf();
     },
@@ -239,6 +291,7 @@ var automonkey = {
   },
 
   setup() {
+    this.startDate = new Date();
     this.injectTab();
     this.tabText("Starting...");
   },
@@ -282,11 +335,5 @@ var automonkey = {
   }
 };
 
-monkeyrunner.setup(automonkey);
+console.debug(monkeyrunner.setup(automonkey));
 
-
-// function dumper
-
-// Object.getOwnPropertyNames(window)
-//   .filter(x => x.toLowerCase().endsWith("ps"))
-//   .join("\n")
