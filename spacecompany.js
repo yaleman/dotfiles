@@ -1,4 +1,5 @@
-monkeyrunner.cancel()
+if (monkeyrunner && typeof monkeyrunner.cancel === "function"){
+    monkeyrunner.cancel()}
 
 
 // function dumper
@@ -43,6 +44,8 @@ var automonkey = {
         this.tabText(`Running at ${new Date().toLocaleTimeString()} ...`);
         if (ring < 3 && dyson >=50) {
             buildRing();
+        } else if (swarm <= 15 && dyson >= 100) {
+            buildSwarm();
         } else if (dyson < 250) {
             // console.log("Dyson is below 250, getting more Dyson...");
             getDyson();
@@ -51,17 +54,21 @@ var automonkey = {
         }
 
         this.powerSupplythings(this);
+        this.buildPower();
+
         this.buyScience();
         this.buildLabs(this);
+
         this.upgradeStorage(this);
-        this.buildPower();
+
         rebuildCommsWonder();
         rebuildStargate();
         rebuildRocketWonder();
         rebuildAntimatterWonder();
         activatePortal();
 
-        if (energyps > this.powerWanted / 10) {
+        this.noPowerThings().map(this.buildThing);
+        if (energyps > this.powerWanted) {
             this.buildThings(this);
         }
 
@@ -88,7 +95,7 @@ var automonkey = {
     },
 
     buildPlasma() {
-        if (energyps > this.powerWanted*0.75) {
+        if (energyps > this.powerWanted) {
             getPlasmatic();
         }
     },
@@ -119,26 +126,54 @@ var automonkey = {
     powerSupplythings(self) {
         const psHeadroom = Math.max(this.itemHeadroom, 0);
         if (lavaps < psHeadroom) {
-            console.debug("Need more lava");
+            console.debug(`Need more lava, only have ${lavaps} < ${psHeadroom}`);
             getVeluptuator();
             getExtruder();
         }
         if (uraniumps < psHeadroom) {
-            console.debug("Need more uranium");
+            console.debug(`Need more uranium, only have ${uraniumps} < ${psHeadroom}`);
             getRecycler();
             getCubic();
             getGrinder();
         }
         if (methaneps < psHeadroom) {
-            console.debug("Need more methane");
+            console.debug(`Need more methane, only have ${methaneps} < ${psHeadroom}`);
             self.buildMethane(self);
         }
         if (charcoalps < psHeadroom) {
-            console.debug("Need more charcoal");
+            console.debug(`Need more charcoal, only have ${charcoalps} < ${psHeadroom}`);
             self.buildCharcoal(self);
+        }
+
+        if (hydrogenps < psHeadroom) {
+            console.debug(`Need more hydrogen, only have ${hydrogenps} < ${psHeadroom}`);
+            self.buildHydrogen(self);
+        }
+        if (heliumps < psHeadroom) {
+            console.debug(`Need more helium, only have ${heliumps} < ${psHeadroom}`);
+            self.buildHelium(self);
         }
     },
 
+    /* Things that don't consume power */
+    noPowerThings() {
+        return [
+            "getMiner", // metal
+            "getWoodcutter", // Wood
+            "getGemMiner", // gems
+            "getBlowtorch", // silicon
+            "getMoonWorker", // lunarite
+            "getPump", // oil
+            "getWoodburner", // charcoal
+            "getVacuum", // methane
+            "getExplorer", // titanium
+            "getDroid", // gold
+            "getScout", // silver
+            "getCollector", // hydrogen
+            "getDrone", // helium
+            "getIcePick", // ice
+        ]
+    },
 
     buildMethane(self) {
         self.buildThing("getVent");
@@ -147,11 +182,25 @@ var automonkey = {
         self.buildThing("getVacuum");
     },
 
+    buildHelium(self) {
+        self.buildThing("getSkimmer");
+        self.buildThing("getCompressor");
+        self.buildThing("getTanker");
+        self.buildThing("getDrone");
+    },
+
     buildCharcoal(self) {
         self.buildThing("getFryer");
         self.buildThing("getKiln");
         self.buildThing("getFurnace");
         self.buildThing("getWoodburner");
+    },
+
+    buildHydrogen(self) {
+        self.buildThing("getHindenburg");
+        self.buildThing("getECell");
+        self.buildThing("getMagnet");
+        self.buildThing("getCollector");
     },
 
     buildThings(self) {
@@ -211,40 +260,38 @@ var automonkey = {
         // self.buildThing("getDestroyer");
         self.buildThing("getDroid");
 
-        // methane
         self.buildMethane(self);
+        self.buildHelium(self);
 
-        // helium
-        // getSkimmer();
-        // getCompressor();
-        // getTanker();
-        self.buildThing("getDrone");
+        // silicon
+        self.buildThing("getBlowtorch");
+
+        // hydrogen
+        self.buildThing("getCollector");
+
+        self.buildHydrogen(self);
 
         // getAnnihilator();
         // getBath()
-        // getBlowtorch();
         // getCage()
         // getChemicalPlant();
         // getCloner();
         // getClub();
-        // getCollector();
+
         // getCondensator();
         // getCrucible();
 
         // getDesert();
         // getDiamondChamber();
-        // getECell();
         // getExtractor();
         // getForest();
         // getFossilator();
 
         // getHarvester();
         // getHeater();
-        // getHindenburg();
         // getHydrazine();
         // getInterCow();
 
-        // getMagnet();
         // getMaxEnergy();
         // getMaxPlasma();
         // getMicroPollutor();
