@@ -11,43 +11,24 @@ It runs while this user is logged in. If the Mac sleeps through a calendar run,
 launchd runs one missed invocation when it wakes; it does not replay every missed
 run. The agent points to this checkout, so keep `updatewiki-cron.sh` here.
 
-Launchd writes to the configured stdout and stderr files but does not rotate
-them. This Mac has no `newsyslog` rule for the updatewiki logs, so they will
-grow until a rotation rule or another cleanup mechanism is added.
+Launchd writes stdout to `/tmp/com.yaleman.updatewiki.log` and stderr to
+`/tmp/com.yaleman.updatewiki.err`. It does not rotate them. Temporary files
+can be removed by macOS, but `/tmp` does not provide a size or age limit for
+these logs while the job keeps writing to them.
 
 ## Install
 
-Run this block from the repository root. It writes the same LaunchAgent
-configuration used on this machine and loads it immediately, which starts the
-first update. If the agent is already loaded, remove it first using the block
-below.
+Run this block from the repository root. The checked-in plist is a template:
+`envsubst` resolves `$HOME` in the executable and working directory paths
+before launchd loads it. Loading starts the first update immediately. If an
+older version is loaded, the block unloads it first.
 
 ```sh
-python3 - <<'PY'
-import pathlib
-import plistlib
-
-repo = pathlib.Path.cwd().resolve()
-home = pathlib.Path.home()
-agent = home / 'Library/LaunchAgents/com.yaleman.updatewiki.plist'
-agent.parent.mkdir(parents=True, exist_ok=True)
-job = {
-    'Label': 'com.yaleman.updatewiki',
-    'ProgramArguments': [str(repo / 'updatewiki-cron.sh')],
-    'WorkingDirectory': str(repo),
-    'EnvironmentVariables': {
-        'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-    },
-    'StartCalendarInterval': [
-        {'Hour': hour, 'Minute': 0} for hour in range(0, 24, 4)
-    ],
-    'RunAtLoad': True,
-    'StandardOutPath': str(home / 'Library/Logs/updatewiki.log'),
-    'StandardErrorPath': str(home / 'Library/Logs/updatewiki.err'),
-}
-agent.write_bytes(plistlib.dumps(job))
-agent.chmod(0o644)
-PY
+if launchctl print "gui/$(id -u)/com.yaleman.updatewiki" >/dev/null 2>&1; then
+    launchctl bootout "gui/$(id -u)/com.yaleman.updatewiki"
+fi
+mkdir -p "$HOME/Library/LaunchAgents"
+envsubst '$HOME' < com.yaleman.updatewiki.plist > "$HOME/Library/LaunchAgents/com.yaleman.updatewiki.plist"
 plutil -lint "$HOME/Library/LaunchAgents/com.yaleman.updatewiki.plist"
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.yaleman.updatewiki.plist"
 ```
@@ -56,7 +37,7 @@ To check whether it loaded and how the most recent run ended:
 
 ```sh
 launchctl print "gui/$(id -u)/com.yaleman.updatewiki"
-tail "$HOME/Library/Logs/updatewiki.log" "$HOME/Library/Logs/updatewiki.err"
+tail /tmp/com.yaleman.updatewiki.log /tmp/com.yaleman.updatewiki.err
 ```
 
 ## Remove
@@ -68,5 +49,4 @@ launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.yaleman.updatew
 rm "$HOME/Library/LaunchAgents/com.yaleman.updatewiki.plist"
 ```
 
-The logs in `$HOME/Library/Logs/updatewiki.log` and
-`$HOME/Library/Logs/updatewiki.err` can also be deleted if no longer needed.
+The files in `/tmp` can also be deleted if no longer needed.

@@ -16,9 +16,9 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>$HOME/Library/Logs/updatewiki.err</string>
+	<string>/tmp/com.yaleman.updatewiki.err</string>
 	<key>StandardOutPath</key>
-	<string>$HOME/Library/Logs/updatewiki.log</string>
+	<string>/tmp/com.yaleman.updatewiki.log</string>
 	<key>StartCalendarInterval</key>
 	<array>
 		<dict>
