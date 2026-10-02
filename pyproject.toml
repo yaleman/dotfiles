@@ -39,12 +39,12 @@ omada-certificate-updater = { workspace = true, editable = true }
 [dependency-groups]
 dev = ["pytest>=9.0.3", "ruff>=0.16.5", "ty>=0.0.75"]
 
-kokoro = [
-    "kokoro>=0.9.4",
-    "soundfile>=0.13.1",
-    "numpy>=2.4.4",
-    "misaki[en]>=0.9.4",
-]
+# kokoro = [
+#     "kokoro>=0.9.4",
+#     "soundfile>=0.13.1",
+#     "numpy>=2.4.4",
+#     "misaki[en]>=0.9.4",
+# ]
 
 omada-certificate-updater = ["omada-certificate-updater"]
 

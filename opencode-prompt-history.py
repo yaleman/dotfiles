@@ -62,7 +62,7 @@ def send_to_splunk(url: str, token: str, index: str, sourcetype: str, event: obj
         "Content-Type": "application/json",
     }
     try:
-        resp = requests.post(f"{url.rstrip('/')}/services/collector/event", json=payload, headers=headers, timeout=10)
+        resp = requests.post(f"{url.rstrip('/')}/services/collector/event", data=payload, headers=headers, timeout=10)
         print(".", end="", flush=True)
         return resp.status_code == 200
     except requests.RequestException as e:
