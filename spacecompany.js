@@ -393,45 +393,50 @@ var automonkey = {
 
 	setup() {
 		this.startDate = new Date();
-		this.injectTab();
+		this.injectStatusTab();
 		this.tabText("Starting...");
 	},
 
-	tab: null,
+	statusTab: null,
 
-	makeTab() {
-		// const tabList = document.getElementById("tabList");
-		this.tab = document.createElement("li");
-		this.tab.id = "automonkeyTab";
-		this.tab.className = "tab";
-		this.tab.textContent = "Not Running";
-		return this.tab;
+	statusTabName: "automonkeyStatusTab",
+
+	makeStatusTab() {
+		this.statusTab = document.createElement("li");
+		this.statusTab.id = this.statusTabName;
+		this.statusTab.className = "tab";
+		this.statusTab.textContent = "Not Running";
+		return this.statusTab;
 	},
 
-	injectTab() {
+	injectStatusTab() {
 		const tabList = document.getElementById("tabList");
-		if (tabList && !this.getTab()) {
-			tabList.appendChild(this.makeTab());
+		if (tabList && !this.getTab(this.statusTabName)) {
+			tabList.appendChild(this.makeStatusTab());
+		} else {
+			console.error(
+				`Failed to inject status tab: tabList not found or tab ${this.statusTabName} already exists.`,
+			);
 		}
 	},
 
-	getTab() {
+	getTab(tabId) {
 		const tabList = document.getElementById("tabList");
-		return tabList.querySelector("#automonkeyTab");
+		return tabList.querySelector(`#${tabId}`);
 	},
 
 	tabText(text) {
-		const tab = this.getTab();
+		const tab = this.getTab(this.statusTabName);
 		if (tab) {
 			tab.textContent = text;
 		}
 	},
 
 	removeTab() {
-		const tab = this.getTab();
+		const tab = this.getTab(this.statusTabName);
 		if (tab) {
 			tab.parentNode.removeChild(tab);
-			this.tab = null;
+			this.statusTab = null;
 		}
 	},
 };
