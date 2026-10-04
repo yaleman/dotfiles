@@ -33,7 +33,7 @@ var automonkey = {
 
 	message(text) {
 		console.debug(`${new Date().toLocaleTimeString()} ${text}`);
-		this.tabText(`${new Date().toLocaleTimeString()} ${text}`);
+		this.statusTabText(`${new Date().toLocaleTimeString()} ${text}`);
 	},
 
 	maxedOut(item) {
@@ -41,7 +41,7 @@ var automonkey = {
 	},
 
 	run() {
-		this.tabText(`Running at ${new Date().toLocaleTimeString()} ...`);
+		this.statusTabText(`Running at ${new Date().toLocaleTimeString()} ...`);
 		if (ring < 3 && dyson >= 50) {
 			buildRing();
 		} else if (swarm <= this.maxSwarms && dyson >= 100) {
@@ -81,7 +81,7 @@ var automonkey = {
 
 		this.buildPlasma();
 
-		this.tabText(
+		this.statusTabText(
 			`Sleeping at ${new Date().toLocaleTimeString()} ... Started at ${this.startDate.toLocaleTimeString()}`,
 		);
 	},
@@ -394,7 +394,7 @@ var automonkey = {
 	setup() {
 		this.startDate = new Date();
 		this.injectStatusTab();
-		this.tabText("Starting...");
+		this.statusTabText("Starting...");
 	},
 
 	statusTab: null,
@@ -425,18 +425,10 @@ var automonkey = {
 		return tabList.querySelector(`#${tabId}`);
 	},
 
-	tabText(text) {
+	statusTabText(text) {
 		const tab = this.getTab(this.statusTabName);
 		if (tab) {
 			tab.textContent = text;
-		}
-	},
-
-	removeTab() {
-		const tab = this.getTab(this.statusTabName);
-		if (tab) {
-			tab.parentNode.removeChild(tab);
-			this.statusTab = null;
 		}
 	},
 };
