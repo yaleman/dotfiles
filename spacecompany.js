@@ -58,6 +58,25 @@ var automonkey = {
 		// don't need it if we have a huge glut of it
 		if (energyps < 20000) {
 			this.buildPower();
+		} else if (
+			sphere === 0 &&
+			swarm >= 10 &&
+			!energyLow &&
+			energy >= Game.resources.getStorage("energy") / 4
+		) {
+			// build things for the final run to get enough resources for the Dyson Sphere
+			if (getResource(RESOURCE.Titanium) < dysonTitaniumCost) {
+				convertEnergy("titanium");
+			} else if (getResource(RESOURCE.Gold) < dysonGoldCost) {
+				convertEnergy("gold");
+			} else if (getResource(RESOURCE.Silicon) < dysonSiliconCost) {
+				convertEnergy("silicon");
+			} else if (getResource(RESOURCE.Meteorite) < dysonMeteoriteCost) {
+				convertPlasma("meteorite");
+			} else if (getResource(RESOURCE.Ice) < dysonIceCost) {
+				convertEnergy("ice");
+			}
+			getDyson();
 		}
 
 		this.buyScience();
@@ -413,10 +432,6 @@ var automonkey = {
 		const tabList = document.getElementById("tabList");
 		if (tabList && !this.getTab(this.statusTabName)) {
 			tabList.appendChild(this.makeStatusTab());
-		} else {
-			console.error(
-				`Failed to inject status tab: tabList not found or tab ${this.statusTabName} already exists.`,
-			);
 		}
 	},
 
