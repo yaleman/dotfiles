@@ -14,5 +14,11 @@ if [[ " $* " =~ " --watch " ]]; then
     sleep 5
   done
 else
-    kubectl get pods -A | rg -v '(Running|Completed|NAMESPACE)'
+    RES=$(kubectl get pods -A | rg -v '(Running|Completed|NAMESPACE)')
+    if [[ -n "$RES" ]]; then
+      echo "$RES"
+      exit 1
+    else
+        exit 0
+    fi
 fi
