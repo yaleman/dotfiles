@@ -53,7 +53,7 @@ var automonkey = {
 			window.alert("250 Dyson!");
 		}
 
-		this.powerSupplythings();
+		// this.powerSupplythings();
 
 		// don't need it if we have a huge glut of it
 		if (energyps < 20000) {
@@ -62,7 +62,7 @@ var automonkey = {
 			sphere === 0 &&
 			swarm >= 10 &&
 			!energyLow &&
-			energy >= Game.resources.getStorage("energy") / 4
+			energy >= 5000 // Game.resources.getStorage("energy") / 4
 		) {
 			// build things for the final run to get enough resources for the Dyson Sphere
 			if (getResource(RESOURCE.Titanium) < dysonTitaniumCost) {
@@ -79,33 +79,33 @@ var automonkey = {
 			getDyson();
 		}
 
-		this.buyScience();
-		this.buildLabs();
+		// this.buyEarlyScience();
+		// this.buildLabs();
 
 		this.upgradeStorage();
 
-		rebuildCommsWonder();
-		rebuildStargate();
-		rebuildRocketWonder();
-		rebuildAntimatterWonder();
-		activatePortal();
+		// rebuildCommsWonder();
+		// rebuildStargate();
+		// rebuildRocketWonder();
+		// rebuildAntimatterWonder();
+		// activatePortal();
 
-		this.noPowerThings().map(this.buildThing);
-		if (plasmaps >= 23.0 || Game.resources.getStorage("plasma") === plasma) {
-			this.buildThing("getWeb");
-		}
-		if (energyps > this.powerWanted) {
-			this.buildThings();
-		}
+		// this.noPowerThings().map(this.buildThing);
+		// if (plasmaps >= 23.0 || Game.resources.getStorage("plasma") === plasma) {
+		// 	this.buildThing("getWeb");
+		// }
+		// if (energyps > this.powerWanted) {
+		// 	this.buildThings();
+		// }
 
-		this.buildPlasma();
+		// this.buildPlasma();
 
 		this.statusTabText(
 			`Sleeping at ${new Date().toLocaleTimeString()} ... Started at ${this.startDate.toLocaleTimeString()}`,
 		);
 	},
 
-	buyScience() {
+	buyEarlyScience() {
 		purchaseTech("unlockLabT3");
 		purchaseTech("unlockLabT2");
 		if (
