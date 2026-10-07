@@ -4,251 +4,884 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "../spacecompany.js"), "utf8");
+const source = fs.readFileSync(
+	path.join(__dirname, "../spacecompany.js"),
+	"utf8",
+);
+const resourceIds = [
+	"energy",
+	"plasma",
+	"uranium",
+	"lava",
+	"oil",
+	"metal",
+	"gem",
+	"charcoal",
+	"wood",
+	"silicon",
+	"lunarite",
+	"methane",
+	"titanium",
+	"gold",
+	"silver",
+	"hydrogen",
+	"helium",
+	"ice",
+	"meteorite",
+	"science",
+	"rocketFuel",
+];
 
-function harness(production, machines) {
+function harness({
+	rates = {},
+	stock = {},
+	machines = [],
+	technologies = {},
+	actions = {},
+	globals = {},
+	storage = {},
+} = {}) {
 	const messages = [];
 	const purchases = [];
+	const gathering = [];
+	const canceled = [];
+	const available = new Map();
 	const context = vm.createContext({
-		RESOURCE: { Energy: "energy", Wood: "wood", Charcoal: "charcoal", Hydrogen: "hydrogen", Plasma: "plasma", Meteorite: "meteorite" },
+		RESOURCE: Object.fromEntries(resourceIds.map((id) => [id, id])),
 		Game: {
-			resources: { getProduction: (resource) => production[resource] ?? 0, getStorage: () => 100 },
-			tech: { getTechData: () => ({ current: 0 }) },
+			resources: {
+				getProduction: (id) => rates[id] ?? 0,
+				getResource: (id) => stock[id] ?? 0,
+				getStorage: (id) => storage[id] ?? (id === "science" ? -1 : 100000),
+				getResourceData: () => ({ unlocked: true }),
+			},
+			tech: { getTechData: (id) => technologies[id] },
+			interstellar: { stars: { systemsConquered: 0 } },
 		},
 		document: {
-			getElementById: () => null,
+			getElementById: (id) =>
+				id.endsWith("Nav")
+					? {
+							classList: { contains: () => false },
+							style: {},
+							parentElement: null,
+						}
+					: null,
 			querySelectorAll: (selector) => {
-				const machine = machines.find((item) => selector.includes(`get${item.name[0].toUpperCase()}${item.name.slice(1)}()`));
-				return machine ? [{ classList: { contains: () => machine.locked ?? false }, style: {}, parentElement: null }] : [];
+				const action = [...available.keys()].find(
+					(name) => selector === `button[onclick="${name}()"]`,
+				);
+				return action
+					? [
+							{
+								classList: { contains: () => available.get(action) === false },
+								style: {},
+								parentElement: null,
+							},
+						]
+					: [];
 			},
 		},
 		console: { debug() {}, error() {} },
 		setInterval: () => 1,
-		clearInterval() {},
+		clearInterval: (id) => canceled.push(id),
+		gainResource: (id) => {
+			gathering.push(id);
+			stock[id] = (stock[id] ?? 0) + 1;
+		},
+		ring: 0,
+		swarm: 0,
+		sphere: 0,
+		dyson: 0,
+		heater: 0,
+		T1Price: 1,
+		ringSegmentCost: 50,
+		swarmSegmentCost: 100,
+		sphereSegmentCost: 250,
+		ringRocketFuelCost: 5,
+		swarmRocketFuelCost: 10,
+		sphereRocketFuelCost: 25,
 		charcoalToggled: true,
-		heaterToggled: true,
 		meteoriteToggled: true,
-		meteorite: 0,
+		heaterToggled: true,
+		plasmaticToggled: true,
+		bathToggled: true,
+		...globals,
 	});
 	context.window = context;
+	context.getCost = (base, level) => Math.floor(base * 1.1 ** level);
+	technologies.energyEfficiencyResearch ??= {
+		unlocked: true,
+		current: 0,
+		maxLevel: 25,
+		cost: { science: 10000000 },
+	};
+	context.purchaseTech = (id) => {
+		const tech = technologies[id];
+		const costs = Object.fromEntries(
+			Object.entries(tech.cost).map(([resource, cost]) => [
+				resource,
+				context.getCost(cost, tech.current),
+			]),
+		);
+		if (
+			Object.entries(costs).some(
+				([resource, cost]) => (stock[resource] ?? 0) < cost,
+			)
+		)
+			return;
+		for (const [resource, cost] of Object.entries(costs))
+			stock[resource] -= cost;
+		tech.current++;
+		for (const next of tech.newTechs ?? []) technologies[next].unlocked = true;
+		purchases.push(id);
+	};
 	for (const machine of machines) {
-		context[machine.name] = 0;
-		for (const [resource, amount] of Object.entries(machine.inputs ?? {})) {
-			context[`${machine.name}${resource[0].toUpperCase()}${resource.slice(1)}Input`] = amount;
-		}
-		context[`get${machine.name[0].toUpperCase()}${machine.name.slice(1)}`] = () => {
+		context[machine.name] = machine.count ?? 0;
+		for (const [resource, amount] of Object.entries(machine.inputs ?? {}))
+			context[
+				`${machine.name}${resource[0].toUpperCase()}${resource.slice(1)}Input`
+			] = amount;
+		const func = `get${machine.name[0].toUpperCase()}${machine.name.slice(1)}`;
+		available.set(func, !machine.locked);
+		context[func] = () => {
+			if (machine.error) throw new Error(machine.error);
 			if (machine.affordable === false) return;
 			context[machine.name]++;
 			purchases.push(machine.name);
 		};
 	}
+	for (const [name, action] of Object.entries(actions)) {
+		available.set(name, true);
+		context[name] = action;
+	}
 	vm.runInContext(source, context);
-	context.automonkey.setMessage = (text) => messages.push(text);
-	return { context, monkey: context.automonkey, messages, purchases };
-}
-
-test("negative production preempts normal purchases even with full storage", () => {
-	const { monkey, purchases, messages } = harness({ wood: -5 }, [{ name: "woodcutter" }]);
-	monkey.maxedOut = () => true;
-	monkey.run(); // Normal execution would access unstubbed Dyson globals and fail.
-	assert.deepEqual(purchases, ["woodcutter"]);
-	assert.match(messages.at(-1), /Recovering wood: -5\/s/);
-});
-
-test("buys only one producer per tick and stops recovery at zero", () => {
-	const production = { wood: -5, energy: -2 };
-	const { monkey, purchases } = harness(production, [{ name: "woodcutter" }, { name: "solarPanel" }]);
-	assert.equal(monkey.recoverProduction(), true);
-	assert.equal(purchases.length, 1);
-	production.wood = 0;
-	production.energy = 0;
-	assert.equal(monkey.recoverProduction(), false);
-	assert.equal(purchases.length, 1);
-});
-
-test("rejects producers that worsen an existing deficit or create a new one", () => {
-	for (const energy of [-1, 0, 9]) {
-		const { monkey, purchases } = harness({ wood: -5, energy }, [
-			{ name: "laserCutter", inputs: { energy: 10 } }, { name: "woodcutter" },
-		]);
-		monkey.recoverProduction();
-		assert.deepEqual(purchases, ["woodcutter"]);
-	}
-});
-
-test("allows sufficient input production with the energy efficiency discount", () => {
-	const { context, monkey, purchases } = harness({ wood: -5, energy: 5 }, [
-		{ name: "laserCutter", inputs: { energy: 10 } },
-	]);
-	context.Game.tech.getTechData = () => ({ current: 50 });
-	monkey.recoverProduction();
-	assert.deepEqual(purchases, ["laserCutter"]);
-});
-
-test("falls back from locked or unaffordable producers", () => {
-	const { monkey, purchases } = harness({ wood: -5, energy: 100 }, [
-		{ name: "infuser", locked: true }, { name: "deforester", affordable: false }, { name: "woodcutter" },
-	]);
-	monkey.recoverProduction();
-	assert.deepEqual(purchases, ["woodcutter"]);
-});
-
-test("waits without normal purchases when recovery is blocked", () => {
-	const { monkey, messages, purchases } = harness({ charcoal: -1, wood: -1 }, [
-		{ name: "woodburner", inputs: { wood: 2 } },
-	]);
-	monkey.run();
-	assert.deepEqual(purchases, []);
-	assert.match(messages.at(-1), /waiting/);
-});
-
-test("does not buy switched-off or power-starved producers", () => {
-	const { context, monkey, purchases } = harness({ charcoal: -1, wood: 10, energy: 20 }, [
-		{ name: "furnace", inputs: { wood: 2, energy: 10 } },
-	]);
-	context.charcoalToggled = false;
-	monkey.recoverProduction();
-	context.charcoalToggled = true;
-	context.energyLow = true;
-	monkey.recoverProduction();
-	assert.deepEqual(purchases, []);
-});
-
-test("starts zero plasma production with one Super-Heater and stops buying more", () => {
-	const { monkey, purchases, messages } = harness({ energy: 1000, hydrogen: 10 }, [
-		{ name: "heater", inputs: { energy: 1000, hydrogen: 10 } },
-	]);
-	monkey.run();
-	assert.deepEqual(purchases, ["heater"]);
-	assert.match(messages.at(-1), /Super-Heater/);
-	assert.equal(monkey.ensurePlasmaProduction(), false);
-	assert.deepEqual(purchases, ["heater"]);
-});
-
-test("does not bootstrap plasma when production already exists", () => {
-	const { monkey, purchases } = harness({ plasma: 1, energy: 1000, hydrogen: 10 }, [{ name: "heater" }]);
-	assert.equal(monkey.ensurePlasmaProduction(), false);
-	assert.deepEqual(purchases, []);
-});
-
-test("plasma bootstrap respects input production, unlocks, toggles and affordability", () => {
-	for (const options of [
-		{ production: { energy: 999, hydrogen: 10 } },
-		{ production: { energy: 1000, hydrogen: 9 } },
-		{ locked: true },
-		{ affordable: false },
-		{ toggled: false },
-	]) {
-		const { context, monkey, purchases } = harness(options.production ?? { energy: 1000, hydrogen: 10 }, [
-			{ name: "heater", inputs: { energy: 1000, hydrogen: 10 }, ...options },
-		]);
-		context.heaterToggled = options.toggled ?? true;
-		assert.equal(monkey.ensurePlasmaProduction(), false);
-		assert.deepEqual(purchases, []);
-	}
-});
-
-test("resource deficit recovery takes priority over starting plasma", () => {
-	const { monkey, purchases } = harness({ wood: -1, energy: 1000, hydrogen: 10 }, [
-		{ name: "woodcutter" }, { name: "heater", inputs: { energy: 1000, hydrogen: 10 } },
-	]);
-	monkey.run();
-	assert.deepEqual(purchases, ["woodcutter"]);
-});
-
-function researchHarness(science, technologies) {
-	const state = harness({ plasma: 1 }, []);
-	const researchPurchases = [];
-	state.context.Game.tech.getTechData = (id) => id === "energyEfficiencyResearch" ? { current: 0 } : technologies[id];
-	state.context.Game.tech.hasResources = (cost) => science >= cost.science;
-	state.context.purchaseTech = (id) => {
-		science -= technologies[id].cost.science;
-		technologies[id].current++;
-		researchPurchases.push(id);
+	context.automonkey.setMessage = (message) => messages.push(message);
+	context.automonkey.beginTick();
+	return {
+		context,
+		monkey: context.automonkey,
+		rates,
+		stock,
+		purchases,
+		gathering,
+		messages,
+		canceled,
+		technologies,
+		available,
 	};
-	return { ...state, researchPurchases };
 }
 
-test("unlocks affordable EMC and Dyson research before normal spending", () => {
-	const { monkey, researchPurchases } = researchHarness(160000, {
-		unlockEmc: { name: "Energy-Mass Conversion", unlocked: true, current: 0, cost: { science: 60000 } },
-		unlockDyson: { name: "Dyson Ring", unlocked: true, current: 0, cost: { science: 100000 } },
+function purchasedTech(extra = {}) {
+	return { unlocked: true, current: 1, maxLevel: 1, cost: {}, ...extra };
+}
+
+function research(science, extra = {}) {
+	return {
+		unlocked: true,
+		current: 0,
+		maxLevel: 1,
+		cost: { science },
+		...extra,
+	};
+}
+
+test("meteorite research spends science before Dyson, including immediately after EMC", () => {
+	const state = harness({
+		stock: { science: 160 },
+		technologies: {
+			unlockEmc: research(60, { newTechs: ["unlockMeteorite"] }),
+			unlockMeteorite: research(100, { unlocked: false }),
+			unlockDyson: research(100),
+		},
 	});
-	monkey.run();
-	assert.deepEqual(researchPurchases, ["unlockEmc", "unlockDyson"]);
-	assert.equal(monkey.unlockProgressionResearch(), false);
+	state.monkey.unlockProgressionResearch();
+	assert.deepEqual(state.purchases, ["unlockEmc", "unlockMeteorite"]);
+	assert.equal(state.technologies.unlockDyson.current, 0);
 });
 
-test("skips locked and already purchased progression research", () => {
-	const { monkey, researchPurchases } = researchHarness(1000000, {
-		unlockEmc: { unlocked: false, current: 0, cost: { science: 60000 } },
-		unlockDyson: { unlocked: true, current: 1, cost: { science: 100000 } },
+test("available meteorite science takes priority without purchased Dyson research", () => {
+	const state = harness({
+		stock: { science: 100 },
+		technologies: { unlockMeteorite: research(100), unlockEmc: research(60) },
 	});
-	assert.equal(monkey.unlockProgressionResearch(), false);
-	assert.deepEqual(researchPurchases, []);
+	state.monkey.unlockProgressionResearch();
+	assert.deepEqual(state.purchases, ["unlockMeteorite"]);
 });
 
-test("rechecks affordability after each research purchase", () => {
-	const { monkey, researchPurchases } = researchHarness(100000, {
-		unlockEmc: { unlocked: true, current: 0, cost: { science: 60000 } },
-		unlockDyson: { unlocked: true, current: 0, cost: { science: 100000 } },
-	});
-	assert.equal(monkey.unlockProgressionResearch(), true);
-	assert.deepEqual(researchPurchases, ["unlockEmc"]);
-});
-
-function meteoriteHarness(plasma, technologies = { unlockEmc: { current: 1 }, unlockDyson: { current: 1 } }) {
-	const state = harness({ plasma }, [
-		{ name: "web", inputs: { plasma: 21 } },
-		{ name: "printer", inputs: { plasma: 3 } },
+test("battery and PSU research wait for T4 and unlock complete chains afterward", () => {
+	const technologies = { unlockLabT4: research(100) };
+	for (const chain of [
+		["unlockPSU", "unlockPSUT2"],
+		[
+			"unlockBatteries",
+			"unlockBatteriesT2",
+			"unlockBatteriesT3",
+			"unlockBatteriesT4",
+		],
+	]) {
+		for (const [index, id] of chain.entries())
+			technologies[id] = research(1, {
+				unlocked: index === 0,
+				newTechs: chain[index + 1] ? [chain[index + 1]] : [],
+			});
+	}
+	technologies.scienceEfficiencyResearch = research(10, { maxLevel: -1 });
+	const state = harness({ stock: { science: 99 }, technologies });
+	state.monkey.buyEarlyScience();
+	assert.deepEqual(state.purchases, []);
+	state.stock.science = 106;
+	state.monkey.buyEarlyScience();
+	assert.deepEqual(state.purchases, [
+		"unlockLabT4",
+		"unlockPSU",
+		"unlockPSUT2",
+		"unlockBatteries",
+		"unlockBatteriesT2",
+		"unlockBatteriesT3",
+		"unlockBatteriesT4",
 	]);
-	state.context.Game.tech.getTechData = (id) => id === "energyEfficiencyResearch" ? { current: 0 } : technologies[id];
+});
+
+test("research affordability uses the growing next-level cost", () => {
+	const state = harness({
+		stock: { science: 100 },
+		technologies: {
+			efficiencyResearch: research(100, { current: 2, maxLevel: -1 }),
+		},
+	});
+	assert.equal(state.monkey.researchCost("efficiencyResearch").science, 121);
+	assert.equal(
+		state.monkey.tryBuyResearch("efficiencyResearch").kind,
+		state.monkey.status.UNAFFORDABLE,
+	);
+	state.stock.science = 121;
+	assert.equal(
+		state.monkey.tryBuyResearch("efficiencyResearch").kind,
+		state.monkey.status.SUCCESS,
+	);
+	assert.equal(state.stock.science, 0);
+});
+
+for (const [resourceCost, expected] of [
+	[99, true],
+	[100, false],
+	[150, false],
+]) {
+	test(`resource efficiency at cost ${resourceCost} obeys the strict 10% threshold of both upgrades`, () => {
+		const state = harness({
+			stock: { science: 10000 },
+			technologies: {
+				unlockLabT4: purchasedTech(),
+				scienceEfficiencyResearch: research(1000, { maxLevel: -1 }),
+				energyEfficiencyResearch: research(2000, { maxLevel: 25 }),
+				efficiencyResearch: research(resourceCost, { maxLevel: -1 }),
+			},
+		});
+		state.monkey.buyEarlyScience();
+		assert.deepEqual(state.purchases, [
+			"scienceEfficiencyResearch",
+			"energyEfficiencyResearch",
+			...(expected ? ["efficiencyResearch"] : []),
+		]);
+	});
+}
+
+test("efficiency comparisons use current costs rather than cheap base prices", () => {
+	const state = harness({
+		stock: { science: 10000 },
+		technologies: {
+			unlockLabT4: purchasedTech(),
+			scienceEfficiencyResearch: research(1000, { maxLevel: -1 }),
+			energyEfficiencyResearch: research(1000, { maxLevel: 25 }),
+			efficiencyResearch: research(50, { current: 10, maxLevel: -1 }),
+		},
+	});
+	state.monkey.buyEarlyScience();
+	assert.deepEqual(state.purchases, [
+		"scienceEfficiencyResearch",
+		"energyEfficiencyResearch",
+	]);
+});
+
+for (const [scienceCost, resourceCost, expected] of [
+	[1000, 500, "efficiencyResearch"],
+	[500, 1000, "scienceEfficiencyResearch"],
+]) {
+	test(`capped energy gives science/resource equal priority, buying ${expected} first`, () => {
+		const state = harness({
+			stock: { science: 1000 },
+			technologies: {
+				unlockLabT4: purchasedTech(),
+				scienceEfficiencyResearch: research(scienceCost, { maxLevel: -1 }),
+				energyEfficiencyResearch: research(1, { current: 25, maxLevel: 25 }),
+				efficiencyResearch: research(resourceCost, { maxLevel: -1 }),
+			},
+		});
+		state.monkey.buyEarlyScience();
+		assert.deepEqual(state.purchases, [expected]);
+	});
+}
+
+test("reaching the energy cap removes the resource discount requirement immediately", () => {
+	const state = harness({
+		stock: { science: 20000 },
+		technologies: {
+			unlockLabT4: purchasedTech(),
+			scienceEfficiencyResearch: research(1000, { maxLevel: -1 }),
+			energyEfficiencyResearch: research(1000, { current: 24, maxLevel: 25 }),
+			efficiencyResearch: research(1000, { maxLevel: -1 }),
+		},
+	});
+	state.monkey.buyEarlyScience();
+	assert.deepEqual(state.purchases, [
+		"scienceEfficiencyResearch",
+		"energyEfficiencyResearch",
+		"efficiencyResearch",
+	]);
+});
+
+function meteoriteHarness(plasma, extra = {}) {
+	return harness({
+		rates: { plasma, energy: 100000, hydrogen: 1000 },
+		stock: { lunarite: 200, silicon: 200, uranium: 200 },
+		technologies: { unlockEmc: purchasedTech(), unlockDyson: purchasedTech() },
+		machines: [
+			{ name: "printer", inputs: { plasma: 3 } },
+			{ name: "web", inputs: { plasma: 21 } },
+			{ name: "heater", count: 1, inputs: { energy: 1000, hydrogen: 10 } },
+		],
+		globals: {
+			printerLunariteCost: 100,
+			printerSiliconCost: 50,
+			webLunariteCost: 100,
+			webSiliconCost: 100,
+			webUraniumCost: 100,
+		},
+		...extra,
+	});
+}
+
+test("deficits preempt every normal purchase, even at full storage", () => {
+	const state = harness({
+		rates: { wood: -5 },
+		stock: { wood: 100000 },
+		machines: [{ name: "woodcutter" }, { name: "lab" }],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["woodcutter"]);
+	assert.match(state.messages.at(-1), /Recovering wood: -5\/s/);
+	assert.deepEqual(state.gathering, ["oil", "metal", "wood", "gem"]);
+});
+
+test("blocked recovery still gathers freely and identifies the blocker", () => {
+	const state = harness({
+		rates: { wood: -5 },
+		machines: [{ name: "woodcutter", affordable: false }],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, []);
+	assert.deepEqual(state.gathering, ["oil", "metal", "wood", "gem"]);
+	assert.match(
+		state.messages.at(-1),
+		/woodcutter needs construction resources/,
+	);
+});
+
+test("recovery builds at most one producer and stops at zero", () => {
+	const state = harness({
+		rates: { wood: -5, energy: -1 },
+		machines: [{ name: "woodcutter" }, { name: "solarPanel" }],
+	});
+	assert.equal(state.monkey.recoverProduction(), true);
+	assert.equal(state.purchases.length, 1);
+	state.rates.wood = 0;
+	state.rates.energy = 0;
+	state.monkey.beginTick();
+	assert.equal(state.monkey.recoverProduction(), false);
+});
+
+test("shared budget prevents cumulative overspending and does not credit new output", () => {
+	const state = harness({
+		rates: { energy: 15 },
+		machines: [
+			{ name: "solarPanel" },
+			{ name: "laserCutter", inputs: { energy: 10 } },
+			{ name: "scorcher", inputs: { energy: 10 } },
+		],
+	});
+	state.context.solarPanelOutput = 100;
+	assert.equal(
+		state.monkey.tryBuildProducer("energy", "solarPanel").kind,
+		state.monkey.status.SUCCESS,
+	);
+	assert.equal(state.monkey.budget.energy, 15);
+	assert.equal(
+		state.monkey.tryBuildProducer("wood", "laserCutter").kind,
+		state.monkey.status.SUCCESS,
+	);
+	assert.equal(
+		state.monkey.tryBuildProducer("silicon", "scorcher").kind,
+		state.monkey.status.INPUTS,
+	);
+	assert.equal(state.monkey.budget.energy, 5);
+	assert.deepEqual(state.purchases, ["solarPanel", "laserCutter"]);
+});
+
+test("input debit includes the energy efficiency discount", () => {
+	const state = harness({
+		rates: { energy: 10 },
+		technologies: { energyEfficiencyResearch: purchasedTech({ current: 50 }) },
+		machines: [
+			{ name: "laserCutter", inputs: { energy: 10 } },
+			{ name: "scorcher", inputs: { energy: 10 } },
+		],
+	});
+	state.monkey.tryBuildProducer("wood", "laserCutter");
+	state.monkey.tryBuildProducer("silicon", "scorcher");
+	assert.deepEqual(state.purchases, ["laserCutter", "scorcher"]);
+	assert.equal(state.monkey.budget.energy, 0);
+});
+
+test("recovery cannot worsen another deficit", () => {
+	const state = harness({
+		rates: { wood: -5, energy: -1 },
+		machines: [
+			{ name: "laserCutter", inputs: { energy: 10 } },
+			{ name: "woodcutter" },
+		],
+	});
+	state.monkey.recoverProduction();
+	assert.deepEqual(state.purchases, ["woodcutter"]);
+});
+
+test("producer results distinguish locked, disabled, inputs, affordability and errors", () => {
+	const cases = [
+		[{ locked: true }, {}, "LOCKED"],
+		[{}, { charcoalToggled: false }, "DISABLED"],
+		[{ inputs: { wood: 2 } }, {}, "INPUTS"],
+		[{ affordable: false }, {}, "UNAFFORDABLE"],
+		[{ error: "broken" }, {}, "ERROR"],
+	];
+	for (const [options, globals, expected] of cases) {
+		const state = harness({
+			machines: [{ name: "woodburner", ...options }],
+			globals,
+		});
+		assert.equal(
+			state.monkey.tryBuildProducer("charcoal", "woodburner").kind,
+			state.monkey.status[expected],
+		);
+		assert.deepEqual(state.purchases, []);
+	}
+});
+
+test("power locks and starvation block powered machines but allow free producers", () => {
+	for (const globals of [{ globalEnergyLock: true }, { energyLow: true }]) {
+		const state = harness({
+			rates: { energy: 100 },
+			machines: [
+				{ name: "laserCutter", inputs: { energy: 10 } },
+				{ name: "woodcutter" },
+			],
+			globals,
+		});
+		assert.equal(
+			state.monkey.tryBuildProducer("wood", "laserCutter").kind,
+			state.monkey.status.DISABLED,
+		);
+		assert.equal(
+			state.monkey.tryBuildProducer("wood", "woodcutter").kind,
+			state.monkey.status.SUCCESS,
+		);
+	}
+});
+
+test("normal tick builds advanced wood, silicon and labs through the shared budget", () => {
+	const state = harness({
+		rates: { energy: 1000, wood: 10, plasma: 1 },
+		stock: { energy: 10000 },
+		machines: [
+			{ name: "laserCutter", inputs: { energy: 10 } },
+			{ name: "scorcher", inputs: { energy: 10 } },
+			{ name: "lab" },
+		],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["lab", "laserCutter", "scorcher"]);
+	assert.equal(state.monkey.budget.energy, 980);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("finite storage uses >= and the correct gem ID; science stays unlimited", () => {
+	const state = harness({
+		stock: { gem: 101 },
+		storage: { gem: 100 },
+		machines: [{ name: "gemMiner" }, { name: "lab" }],
+	});
+	assert.equal(state.monkey.maxedOut("gem"), true);
+	state.monkey.buildProducers("gem");
+	state.monkey.buildProducers("science");
+	assert.deepEqual(state.purchases, ["lab"]);
+});
+
+test("bootstraps one Super-Heater without repeated zero-output purchases", () => {
+	const state = harness({
+		rates: { energy: 1000, hydrogen: 10 },
+		machines: [{ name: "heater", inputs: { energy: 1000, hydrogen: 10 } }],
+	});
+	assert.equal(state.monkey.ensurePlasmaProduction(), true);
+	state.monkey.beginTick();
+	assert.equal(state.monkey.ensurePlasmaProduction(), false);
+	assert.deepEqual(state.purchases, ["heater"]);
+});
+
+test("meteorite target grows plasma after the first heater and never spends new output immediately", () => {
+	const state = meteoriteHarness(1);
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, ["heater"]);
+	assert.equal(state.monkey.budget.plasma, 1);
+	assert.match(state.messages.at(-1), /supply web/);
+	state.rates.plasma = 22;
+	state.monkey.beginTick();
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, ["heater", "web"]);
+	assert.equal(state.monkey.budget.plasma, 1);
+});
+
+test("meteorite reserve boundary is exact and shared between multiple same-tick purchases", () => {
+	for (const [plasma, expected] of [
+		[3.99, "INPUTS"],
+		[4, "SUCCESS"],
+	]) {
+		const state = meteoriteHarness(plasma);
+		assert.equal(
+			state.monkey.tryBuildProducer("meteorite", "printer").kind,
+			state.monkey.status[expected],
+		);
+	}
+	const state = meteoriteHarness(24);
+	assert.equal(
+		state.monkey.tryBuildProducer("meteorite", "web").kind,
+		state.monkey.status.SUCCESS,
+	);
+	assert.equal(
+		state.monkey.tryBuildProducer("meteorite", "printer").kind,
+		state.monkey.status.INPUTS,
+	);
+});
+
+test("meteorite target respects current costs and Printer T1Price discount", () => {
+	const state = meteoriteHarness(4, {
+		stock: { lunarite: 50, silicon: 25 },
+		globals: {
+			T1Price: 0.5,
+			printerLunariteCost: 100,
+			printerSiliconCost: 50,
+			webLunariteCost: 100,
+			webSiliconCost: 100,
+			webUraniumCost: 100,
+		},
+	});
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, ["printer"]);
+});
+
+test("meteorite production is gated by both researches, storage and the player toggle", () => {
+	for (const mutate of [
+		(state) => {
+			state.technologies.unlockEmc.current = 0;
+		},
+		(state) => {
+			state.technologies.unlockDyson.current = 0;
+		},
+		(state) => {
+			state.stock.meteorite = 100000;
+		},
+		(state) => {
+			state.context.meteoriteToggled = false;
+		},
+	]) {
+		const state = meteoriteHarness(100);
+		mutate(state);
+		state.monkey.buildMeteoriteProduction();
+		assert.deepEqual(state.purchases, []);
+	}
+});
+
+test("complete Plasma, EMC and Dyson two-stage research sequence spends live balances", () => {
+	const technologies = Object.fromEntries(
+		["unlockPlasma", "unlockEmc", "unlockDyson"].map((id) => [
+			id,
+			{
+				unlocked: false,
+				current: 0,
+				maxLevel: 1,
+				cost: {
+					science: {
+						unlockPlasma: 40000,
+						unlockEmc: 60000,
+						unlockDyson: 100000,
+					}[id],
+				},
+			},
+		]),
+	);
+	const state = harness({
+		technologies,
+		stock: {
+			hydrogen: 1500,
+			uranium: 1500,
+			oil: 15000,
+			wood: 15000,
+			energy: 175000,
+			plasma: 10100,
+			science: 200000,
+		},
+	});
+	for (const [id, func, cost] of [
+		[
+			"unlockPlasma",
+			"unlockPlasmaResearch",
+			{ hydrogen: 1500, uranium: 1500, oil: 15000, wood: 15000 },
+		],
+		["unlockEmc", "unlockEmcResearch", { energy: 75000, plasma: 100 }],
+		["unlockDyson", "unlockDysonResearch", { energy: 100000, plasma: 10000 }],
+	]) {
+		state.available.set(func, true);
+		state.context[func] = () => {
+			for (const [resource, amount] of Object.entries(cost))
+				state.stock[resource] -= amount;
+			technologies[id].unlocked = true;
+		};
+	}
+	state.monkey.unlockProgressionResearch();
+	assert.deepEqual(state.purchases, [
+		"unlockPlasma",
+		"unlockEmc",
+		"unlockDyson",
+	]);
+	assert.equal(state.stock.science, 0);
+	assert.equal(state.stock.energy, 0);
+	assert.equal(state.stock.plasma, 0);
+	state.monkey.unlockProgressionResearch();
+	assert.equal(state.purchases.length, 3);
+});
+
+test("research checks locked state, finite limits, affordability and unlimited upgrades", () => {
+	const technologies = {
+		locked: { unlocked: false, current: 0, maxLevel: 1, cost: {} },
+		complete: purchasedTech(),
+		expensive: {
+			unlocked: true,
+			current: 0,
+			maxLevel: 1,
+			cost: { science: 10 },
+		},
+		repeatable: {
+			unlocked: true,
+			current: 2,
+			maxLevel: -1,
+			cost: { science: 1 },
+		},
+	};
+	const state = harness({ technologies, stock: { science: 2 } });
+	for (const [id, expected] of [
+		["locked", "LOCKED"],
+		["complete", "COMPLETE"],
+		["expensive", "UNAFFORDABLE"],
+		["repeatable", "SUCCESS"],
+	])
+		assert.equal(
+			state.monkey.tryBuyResearch(id).kind,
+			state.monkey.status[expected],
+		);
+	assert.equal(technologies.repeatable.current, 3);
+});
+
+test("progression research has priority over repeatable upgrades", () => {
+	const state = harness({
+		stock: { science: 60000 },
+		technologies: {
+			unlockEmc: {
+				unlocked: true,
+				current: 0,
+				maxLevel: 1,
+				cost: { science: 60000 },
+			},
+			scienceEfficiencyResearch: {
+				unlocked: true,
+				current: 0,
+				maxLevel: -1,
+				cost: { science: 60000 },
+			},
+		},
+	});
+	state.monkey.unlockProgressionResearch();
+	state.monkey.buyEarlyScience();
+	assert.deepEqual(state.purchases, ["unlockEmc"]);
+});
+
+function dysonHarness(globals = {}) {
+	const state = harness({
+		technologies: {
+			unlockDyson: purchasedTech(),
+			unlockDysonSphere: purchasedTech(),
+		},
+		stock: { rocketFuel: 100 },
+		globals: { ring: 3, swarm: 6, ...globals },
+	});
+	for (const target of ["ring", "swarm", "sphere"]) {
+		const func = `build${target[0].toUpperCase()}${target.slice(1)}`;
+		state.available.set(func, true);
+		state.context[func] = () => {
+			state.context[target]++;
+			state.context.dyson -= state.context[`${target}SegmentCost`];
+		};
+	}
+	state.available.set("getDyson", true);
+	state.context.getDyson = () => {
+		state.context.dyson++;
+		state.purchases.push("dyson");
+	};
 	return state;
 }
 
-test("meteorite production requires both EMC and Dyson research", () => {
-	for (const missing of ["unlockEmc", "unlockDyson"]) {
-		const technologies = { unlockEmc: { current: 1 }, unlockDyson: { current: 1 } };
-		technologies[missing].current = 0;
-		const { monkey, purchases } = meteoriteHarness(100, technologies);
-		assert.equal(monkey.buildMeteoriteProduction(), false);
-		assert.deepEqual(purchases, []);
-	}
+test("Dyson respects actual segment and fuel costs, and accumulates after failed assembly", () => {
+	const state = dysonHarness({
+		ring: 2,
+		swarm: 0,
+		dyson: 5,
+		ringSegmentCost: 5,
+	});
+	state.context.buildRing = () => {};
+	state.monkey.buildDyson();
+	assert.equal(state.context.ring, 2);
+	assert.deepEqual(state.messages, []);
+	state.context.dyson = 4;
+	state.stock.rocketFuel = 0;
+	state.monkey.buildDyson();
+	assert.equal(state.context.dyson, 5);
+	assert.deepEqual(state.purchases, ["dyson"]);
 });
 
-test("meteorite purchases preserve one full plasma per second", () => {
-	for (const [plasma, expected] of [[3, []], [3.99, []], [4, ["printer"]], [21.99, ["printer"]], [22, ["web"]]]) {
-		const { monkey, purchases } = meteoriteHarness(plasma);
-		monkey.buildMeteoriteProduction();
-		assert.deepEqual(purchases, expected);
-	}
+test("six-swarm cap proceeds to a sphere and only successful counts produce messages", () => {
+	const state = dysonHarness({ dyson: 250 });
+	state.monkey.buildDyson();
+	assert.equal(state.context.swarm, 6);
+	assert.equal(state.context.sphere, 1);
+	assert.match(state.messages.at(-1), /Built Dyson sphere/);
+	state.monkey.buildDyson();
+	assert.equal(state.context.sphere, 1);
 });
 
-test("meteorite recovery also preserves the plasma reserve", () => {
-	const { monkey } = meteoriteHarness(3.99);
-	assert.equal(monkey.tryBuildProducer("meteorite", "printer"), false);
+test("Dyson enforces research and sphere conquest eligibility", () => {
+	const state = dysonHarness({ dyson: 250 });
+	state.technologies.unlockDysonSphere.current = 0;
+	state.monkey.buildDyson();
+	assert.equal(state.context.sphere, 0);
+	state.technologies.unlockDysonSphere.current = 1;
+	state.context.sphere = 1;
+	state.monkey.buildDyson();
+	assert.equal(state.context.sphere, 1);
+	assert.deepEqual(state.messages, []);
 });
 
-test("does not buy meteorite producers at full storage or when disabled", () => {
-	const { context, monkey, purchases } = meteoriteHarness(100);
-	context.meteorite = 100;
-	assert.equal(monkey.buildMeteoriteProduction(), false);
-	context.meteorite = 0;
-	context.meteoriteToggled = false;
-	assert.equal(monkey.buildMeteoriteProduction(), false);
-	assert.deepEqual(purchases, []);
+test("segments continue accumulating while swarm assembly research is locked", () => {
+	const state = dysonHarness({ swarm: 0, dyson: 50 });
+	state.technologies.unlockDysonSphere.current = 0;
+	state.monkey.buildDyson();
+	assert.equal(state.context.swarm, 0);
+	assert.equal(state.context.dyson, 51);
 });
 
-test("unlocks meteorite production research only after EMC and Dyson", () => {
-	const technologies = {
-		unlockEmc: { current: 1 }, unlockDyson: { current: 0 },
-		unlockMeteorite: { unlocked: true, current: 0, cost: { science: 100000 } },
-		unlockMeteoriteTier1: { unlocked: true, current: 0, cost: { science: 75000 } },
-		unlockMeteoriteTier2: { unlocked: true, current: 0, cost: { science: 100000 } },
+test("unexpected tick errors stop the interval and appear in the status span", () => {
+	const state = harness({
+		rates: { wood: -1 },
+		machines: [{ name: "woodcutter", error: "purchase broke" }],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.canceled, [1]);
+	assert.equal(state.context.monkeyrunner.timeoutID, null);
+	assert.match(state.messages.at(-1), /Stopped: Error: purchase broke/);
+});
+
+test("resource availability follows legacy navigation even when entry flags are stale", () => {
+	const state = harness();
+	state.context.Game.resources.getResourceData = () => ({ unlocked: false });
+	state.monkey.manualResource();
+	assert.deepEqual(state.gathering, ["oil", "metal", "wood", "gem"]);
+	state.context.document.getElementById = () => ({
+		classList: { contains: () => true },
+		style: {},
+		parentElement: null,
+	});
+	assert.equal(state.monkey.isResourceAvailable("oil"), false);
+});
+
+test("a hidden top-level navigation tab prevents purchases from its inactive panel", () => {
+	const state = harness({ machines: [{ name: "lab" }] });
+	const pane = {
+		id: "research",
+		classList: { contains: () => false },
+		style: {},
+		parentElement: {
+			id: "tabContent",
+			classList: { contains: () => false },
+			style: {},
+			parentElement: null,
+		},
 	};
-	const { monkey, researchPurchases } = researchHarness(275000, technologies);
-	assert.equal(monkey.unlockProgressionResearch(), false);
-	technologies.unlockDyson.current = 1;
-	assert.equal(monkey.unlockProgressionResearch(), true);
-	assert.deepEqual(researchPurchases, ["unlockMeteorite", "unlockMeteoriteTier1", "unlockMeteoriteTier2"]);
+	state.context.document.querySelectorAll = () => [
+		{ classList: { contains: () => false }, style: {}, parentElement: pane },
+	];
+	state.context.document.querySelector = () => ({
+		classList: { contains: () => true },
+		style: {},
+		parentElement: null,
+	});
+	assert.equal(
+		state.monkey.tryBuildProducer("science", "lab").kind,
+		state.monkey.status.LOCKED,
+	);
+	assert.deepEqual(state.purchases, []);
+});
+
+test("Dyson costs resolve global lexical constants without window properties", () => {
+	const state = dysonHarness({ dyson: 250 });
+	for (const name of [
+		"ringSegmentCost",
+		"swarmSegmentCost",
+		"sphereSegmentCost",
+		"ringRocketFuelCost",
+		"swarmRocketFuelCost",
+		"sphereRocketFuelCost",
+	]) {
+		const value = state.context[name];
+		delete state.context[name];
+		vm.runInContext(`const ${name} = ${value};`, state.context);
+	}
+	state.context.buildSphere = () => {
+		state.context.sphere++;
+		state.context.dyson -= 250;
+	};
+	state.monkey.buildDyson();
+	assert.equal(state.context.sphere, 1);
+	assert.equal(state.context.dyson, 0);
+});
+
+test("plasma growth respects disabled production and insufficient fuel production", () => {
+	for (const disable of [
+		(state) => {
+			state.context.heaterToggled = false;
+		},
+		(state) => {
+			state.monkey.budget.hydrogen = 9;
+		},
+	]) {
+		const state = meteoriteHarness(1);
+		disable(state);
+		state.monkey.buildMeteoriteProduction();
+		assert.deepEqual(state.purchases, []);
+	}
 });

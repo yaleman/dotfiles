@@ -1,13 +1,6 @@
 // biome-ignore lint/correctness/noInvalidUseBeforeDeclaration: "used to reset state"
 monkeyrunner?.cancel();
 
-// function dumper
-
-// Object.getOwnPropertyNames(window)
-//   .filter(x => x.toLowerCase().endsWith("ps"))
-//   .join("\n")
-// Number.parseFloat(Game.tech.getTechData('efficiencyResearch').getCostElement().text().replace(",",""))
-
 var monkeyrunner = {
 	timeoutID: null,
 	cancel() {
@@ -71,606 +64,607 @@ var automonkey = {
 		helium: ["cage", "skimmer", "compressor", "tanker", "drone"],
 		ice: ["overexchange", "mrFreeze", "freezer", "iceDrill", "icePick"],
 		meteorite: ["nebulous", "smasher", "web", "printer"],
+		science: ["labT5", "labT4", "labT3", "labT2", "lab"],
 	},
+
+	status: Object.freeze({
+		SUCCESS: "success",
+		LOCKED: "locked",
+		DISABLED: "disabled",
+		INPUTS: "insufficient-inputs",
+		UNAFFORDABLE: "unaffordable",
+		COMPLETE: "complete",
+		ERROR: "error",
+	}),
+	budget: null,
 
 	message(text) {
-		console.debug(`${new Date().toLocaleTimeString()} ${text}`);
-		this.setMessage(`${new Date().toLocaleTimeString()} ${text}`);
+		const message = `${new Date().toLocaleTimeString()} ${text}`;
+		console.debug(message);
+		this.setMessage(message);
 	},
 
-	maxedOut(item) {
-		return Game.resources.getStorage(item) === window[item];
+	beginTick() {
+		this.budget = Object.fromEntries(
+			[...new Set(Object.values(RESOURCE))].map((id) => [
+				id,
+				Game.resources.getProduction(id),
+			]),
+		);
+		this.energyInputMultiplier = Math.max(
+			0,
+			1 - Game.tech.getTechData("energyEfficiencyResearch").current * 0.01,
+		);
+		this.builtThisTick = new Set();
+		this.lastAction = null;
+	},
+
+	maxedOut(resource) {
+		const capacity = Game.resources.getStorage(resource);
+		return capacity > 0 && Game.resources.getResource(resource) >= capacity;
 	},
 
 	run() {
-		if (this.recoverProduction()) return;
-		if (this.ensurePlasmaProduction()) return;
-		if (this.unlockProgressionResearch()) return;
-		if (this.buildMeteoriteProduction()) return;
-
-		this.setMessage(`Running at ${new Date().toLocaleTimeString()} ...`);
-		if (ring < 3 && dyson >= 50) {
-			buildRing();
-		} else if (swarm <= this.maxSwarms && dyson >= 100) {
-			buildSwarm();
-		} else if (dyson < 250) {
-			// console.log("Dyson is below 250, getting more Dyson...");
-			getDyson();
-		} else {
-			buildSphere();
-			window.alert("250 Dyson! Sphere bought!");
-		}
-
-		this.powerSupplythings();
-
-		// don't need it if we have a huge glut of it
-		if (energyps < 20000 || energy <= 0) {
-			this.buildPower();
-		} else if (sphere === 0 && swarm >= 10 && !energyLow && energy >= 5000) {
-			// build things for the final run to get enough resources for the Dyson Sphere
-			if (getResource(RESOURCE.Titanium) < dysonTitaniumCost) {
-				convertEnergy("titanium");
-			} else if (getResource(RESOURCE.Gold) < dysonGoldCost) {
-				convertEnergy("gold");
-			} else if (getResource(RESOURCE.Silicon) < dysonSiliconCost) {
-				convertEnergy("silicon");
-			} else if (getResource(RESOURCE.Meteorite) < dysonMeteoriteCost) {
-				convertPlasma("meteorite");
-			} else if (getResource(RESOURCE.Ice) < dysonIceCost) {
-				convertEnergy("ice");
-			}
-			getDyson();
-		}
-
-		if (
-			sphere === 1 &&
-			(document.getElementById("rebuildStargate").className === "hidden") ===
-				false &&
-			!energyLow &&
-			energy >= 5000
-		) {
-			if (getResource(RESOURCE.Meteorite) < stargateWonderMeteoriteCost) {
-				convertPlasma("meteorite");
-			}
-			if (getResource(RESOURCE.Plasma) < stargateWonderPlasmaCost) {
-				gainResource("plasma");
-			}
-			if (getResource(RESOURCE.Silicon) < stargateWonderSiliconCost) {
-				convertEnergy("silicon");
+		try {
+			this.beginTick();
+			this.manualResource();
+			if (this.recoverProduction()) return;
+			this.unlockProgressionResearch();
+			this.ensurePlasmaProduction();
+			this.buildMeteoriteProduction();
+			this.buildDyson();
+			for (const resource of [
+				"lava",
+				"uranium",
+				"methane",
+				"charcoal",
+				"wood",
+				"hydrogen",
+				"helium",
+			]) {
+				if (this.budget[resource] < Math.max(this.itemHeadroom, 0))
+					this.buildProducers(resource);
 			}
 			if (
-				getResource(RESOURCE.Meteorite) >= stargateWonderMeteoriteCost &&
-				getResource(RESOURCE.Plasma) >= stargateWonderPlasmaCost &&
-				getResource(RESOURCE.Silicon) >= stargateWonderSiliconCost
-			) {
-				rebuildStargate();
+				this.budget.energy < 20000 ||
+				Game.resources.getResource("energy") <= 0
+			)
+				this.buildProducers("energy");
+			this.rebuildStargate();
+			this.upgradeStorage();
+			this.buyEarlyScience();
+			this.buildProducers("science");
+			const powered =
+				Game.resources.getResource("energy") > this.powerWanted &&
+				!window.energyLow &&
+				!window.globalEnergyLock &&
+				this.budget.energy > 0;
+			for (const resource of Object.keys(this.producers)) {
+				if (["energy", "plasma", "meteorite", "science"].includes(resource))
+					continue;
+				this.buildProducers(resource, !powered);
 			}
+			this.setMessage(
+				this.lastAction ??
+					`Sleeping at ${new Date().toLocaleTimeString()} — started at ${this.startDate.toLocaleTimeString()}`,
+			);
+		} catch (error) {
+			monkeyrunner.cancel();
+			console.error("Automonkey stopped", error);
+			this.setMessage(`Stopped: ${String(error)}`);
 		}
+	},
 
-		this.upgradeStorage();
-
-		this.buyEarlyScience();
-		this.buildLabs();
-
-		// rebuildCommsWonder();
-		// rebuildStargate();
-		// rebuildRocketWonder();
-		// rebuildAntimatterWonder();
-		// activatePortal();
-
-		this.noPowerThings().map((func) => this.buildThing(func));
-
-		if (energy > this.powerWanted && !energyLow && energyps > 0) {
-			this.buildThings();
-		}
-
-		// this.buildPlasma();
-
-		this.manualResource();
-
-		this.toSpace();
-
-		this.setMessage(
-			`Sleeping at ${new Date().toLocaleTimeString()} ... Started at ${this.startDate.toLocaleTimeString()}`,
+	isActionAvailable(func) {
+		if (typeof window[func] !== "function") return false;
+		return [...document.querySelectorAll(`button[onclick="${func}()"]`)].some(
+			(button) => this.isElementAvailable(button),
 		);
 	},
 
-	ensurePlasmaProduction() {
-		if (Game.resources.getProduction("plasma") !== 0 || window.heater >= 1)
-			return false;
-		if (!this.tryBuildProducer("plasma", "heater")) return false;
-		this.setMessage("Built a Super-Heater to start plasma production.");
+	isElementAvailable(element) {
+		if (!element) return false;
+		for (; element; element = element.parentElement) {
+			if (
+				element.classList.contains("hidden") ||
+				element.style.display === "none" ||
+				element.disabled
+			)
+				return false;
+			if (element.parentElement?.id === "tabContent") {
+				const navigation = document.querySelector(
+					`#tabList [href="#${element.id}"]`,
+				);
+				if (!this.isElementAvailable(navigation)) return false;
+			}
+		}
 		return true;
 	},
 
-	hasMeteoritePrerequisites() {
-		return ["unlockEmc", "unlockDyson"].every((id) => Game.tech.getTechData(id)?.current > 0);
+	isResourceAvailable(resource) {
+		// Legacy research updates navigation visibility, not resource-entry unlock flags.
+		return this.isElementAvailable(document.getElementById(`${resource}Nav`));
 	},
 
-	buildMeteoriteProduction() {
-		if (!this.hasMeteoritePrerequisites() || this.maxedOut("meteorite")) return false;
-		for (const producer of this.producers.meteorite) {
-			if (this.tryBuildProducer("meteorite", producer)) {
-				this.setMessage(`Built ${producer} for meteorite production, keeping at least 1 plasma/s spare.`);
-				return true;
+	producerInputs(producer) {
+		const inputs = {};
+		for (const resource of Object.keys(this.budget)) {
+			const suffix = `${resource[0].toUpperCase()}${resource.slice(1)}Input`;
+			const amount = window[`${producer}${suffix}`] ?? 0;
+			inputs[resource] =
+				resource === "energy" ? amount * this.energyInputMultiplier : amount;
+		}
+		return inputs;
+	},
+
+	checkProducer(resource, producer) {
+		const func = `get${producer[0].toUpperCase()}${producer.slice(1)}`;
+		if (!this.isActionAvailable(func))
+			return { kind: this.status.LOCKED, producer };
+		if (this.builtThisTick.has(producer))
+			return { kind: this.status.COMPLETE, producer };
+		const inputs = this.producerInputs(producer);
+		if (
+			(window.globalEnergyLock &&
+				(resource === "energy" || inputs.energy > 0)) ||
+			(window.energyLow && inputs.energy > 0) ||
+			(resource === "charcoal" && !window.charcoalToggled) ||
+			(resource === "meteorite" &&
+				(!window.meteoriteToggled || !this.hasMeteoritePrerequisites())) ||
+			(resource === "plasma" && !window[`${producer}Toggled`])
+		) {
+			return { kind: this.status.DISABLED, producer };
+		}
+		for (const [input, consumption] of Object.entries(inputs)) {
+			const reserve = resource === "meteorite" && input === "plasma" ? 1 : 0;
+			if (
+				(consumption > 0 || reserve > 0) &&
+				this.budget[input] < consumption + reserve
+			) {
+				return {
+					kind: this.status.INPUTS,
+					producer,
+					input,
+					required: consumption + reserve,
+					available: this.budget[input],
+				};
 			}
+		}
+		return { kind: this.status.SUCCESS, producer, func, inputs };
+	},
+
+	tryBuildProducer(resource, producer) {
+		const checked = this.checkProducer(resource, producer);
+		if (checked.kind !== this.status.SUCCESS) return checked;
+		try {
+			const before = window[producer];
+			if (!Number.isFinite(before))
+				throw new Error(`Missing building count: ${producer}`);
+			window[checked.func]();
+			if (window[producer] <= before)
+				return { kind: this.status.UNAFFORDABLE, producer };
+			for (const [input, consumption] of Object.entries(checked.inputs))
+				this.budget[input] -= consumption;
+			// New production is deliberately not credited until the game refreshes next tick.
+			this.builtThisTick.add(producer);
+			return { kind: this.status.SUCCESS, producer };
+		} catch (error) {
+			return { kind: this.status.ERROR, producer, error };
+		}
+	},
+
+	recordResult(result, successMessage) {
+		switch (result.kind) {
+			case this.status.SUCCESS:
+				this.lastAction = successMessage;
+				this.message(successMessage);
+				return true;
+			case this.status.ERROR:
+				throw result.error;
+			default:
+				return false;
+		}
+	},
+
+	buildProducers(resource, freeOnly = false) {
+		if (this.maxedOut(resource)) return;
+		for (const producer of this.producers[resource]) {
+			if (
+				freeOnly &&
+				Object.values(this.producerInputs(producer)).some(
+					(amount) => amount > 0,
+				)
+			)
+				continue;
+			this.recordResult(
+				this.tryBuildProducer(resource, producer),
+				`Built ${producer}`,
+			);
+		}
+	},
+
+	recoverProduction() {
+		const deficits = Object.keys(this.budget).filter(
+			(resource) => this.budget[resource] < 0,
+		);
+		if (deficits.length === 0) return false;
+		const summary = deficits
+			.map((resource) => `${resource}: ${this.budget[resource].toFixed(0)}/s`)
+			.join(", ");
+		const blocked = [];
+		for (const resource of deficits) {
+			for (const producer of this.producers[resource] ?? []) {
+				const result = this.tryBuildProducer(resource, producer);
+				if (
+					this.recordResult(
+						result,
+						`Recovering ${summary} — built ${producer}; checking again next tick.`,
+					)
+				)
+					return true;
+				blocked.push(result);
+			}
+		}
+		const reason =
+			blocked.find((result) => result.kind === this.status.UNAFFORDABLE) ??
+			blocked.find((result) => result.kind === this.status.INPUTS) ??
+			blocked.find((result) => result.kind === this.status.DISABLED) ??
+			blocked[0];
+		let detail = "no producer is available";
+		if (reason) {
+			switch (reason.kind) {
+				case this.status.UNAFFORDABLE:
+					detail = `${reason.producer} needs construction resources`;
+					break;
+				case this.status.INPUTS:
+					detail = `${reason.producer} needs ${reason.required.toFixed(0)} ${reason.input}/s, available ${reason.available.toFixed(0)}/s`;
+					break;
+				case this.status.DISABLED:
+					detail = `${reason.producer} production is disabled or power-starved`;
+					break;
+				case this.status.LOCKED:
+					detail = `${reason.producer} needs its unlock`;
+					break;
+			}
+		}
+		this.setMessage(`Recovering ${summary} — waiting: ${detail}.`);
+		return true;
+	},
+
+	ensurePlasmaProduction() {
+		if (this.budget.plasma === 0 && window.heater < 1) {
+			return this.recordResult(
+				this.tryBuildProducer("plasma", "heater"),
+				"Built a Super-Heater to start plasma production.",
+			);
 		}
 		return false;
 	},
 
-	recoverProduction() {
-		const resources = [...new Set(Object.values(RESOURCE))];
-		const deficits = resources.filter(
-			(resource) => Game.resources.getProduction(resource) < 0,
+	hasMeteoritePrerequisites() {
+		return ["unlockEmc", "unlockDyson"].every(
+			(id) => Game.tech.getTechData(id)?.current > 0,
 		);
-		if (deficits.length === 0) return false;
+	},
 
-		const summary = deficits
-			.map(
-				(resource) =>
-					`${resource}: ${Game.resources.getProduction(resource).toFixed(0)}/s`,
+	meteoriteCost(producer) {
+		const materials = {
+			printer: ["lunarite", "silicon"],
+			web: ["lunarite", "uranium", "silicon"],
+			smasher: ["silicon", "silver", "gem"],
+			nebulous: ["lunarite", "lava", "gold"],
+		};
+		return Object.fromEntries(
+			materials[producer].map((resource) => [
+				resource,
+				window[
+					`${producer}${resource[0].toUpperCase()}${resource.slice(1)}Cost`
+				] * (producer === "printer" ? window.T1Price : 1),
+			]),
+		);
+	},
+
+	buildMeteoriteProduction() {
+		if (
+			!this.hasMeteoritePrerequisites() ||
+			!window.meteoriteToggled ||
+			this.maxedOut("meteorite")
+		)
+			return;
+		for (const producer of this.producers.meteorite) {
+			const func = `get${producer[0].toUpperCase()}${producer.slice(1)}`;
+			if (
+				!this.isActionAvailable(func) ||
+				!this.hasResources(this.meteoriteCost(producer))
 			)
-			.join(", ");
-		for (const resource of deficits) {
-			for (const producer of this.producers[resource] ?? []) {
-				if (this.tryBuildProducer(resource, producer)) {
-					this.setMessage(
-						`Recovering ${summary} — built ${producer}; checking again next tick.`,
-					);
-					return true;
+				continue;
+			const result = this.tryBuildProducer("meteorite", producer);
+			if (result.kind === this.status.INPUTS && result.input === "plasma") {
+				for (const plasmaProducer of this.producers.plasma) {
+					if (
+						this.recordResult(
+							this.tryBuildProducer("plasma", plasmaProducer),
+							`Built ${plasmaProducer} to supply ${producer} and keep 1 plasma/s spare.`,
+						)
+					)
+						return;
 				}
-			}
-		}
-		this.setMessage(
-			`Recovering ${summary} — waiting for an affordable, unlocked producer with enough input production.`,
-		);
-		return true;
-	},
-
-	tryBuildProducer(resource, producer) {
-		const resources = [...new Set(Object.values(RESOURCE))];
-		if (!this.canRunProducer(resource, producer, resources)) return false;
-		const func = `get${producer[0].toUpperCase()}${producer.slice(1)}`;
-		// Legacy purchase functions do not enforce research unlocks or return success.
-		const buttons = document.querySelectorAll(`button[onclick="${func}()"]`);
-		const unlocked = [...buttons].some((button) => {
-			for (let element = button; element; element = element.parentElement) {
-				if (
-					element.classList.contains("hidden") ||
-					element.style.display === "none"
+			} else if (
+				this.recordResult(
+					result,
+					`Built ${producer}, keeping at least 1 plasma/s spare.`,
 				)
-					return false;
-			}
-			return true;
-		});
-		if (!unlocked || typeof window[func] !== "function") return false;
-
-		const before = window[producer];
-		this.buildThing(func);
-		return window[producer] > before;
-	},
-
-	canRunProducer(resource, producer, resources) {
-		if (window.globalEnergyLock) return false;
-		if (resource === "charcoal" && !window.charcoalToggled) return false;
-		if (resource === "meteorite" && (!window.meteoriteToggled || !this.hasMeteoritePrerequisites())) return false;
-		if (resource === "plasma" && !window[`${producer}Toggled`]) return false;
-
-		for (const input of resources) {
-			const suffix = `${input[0].toUpperCase()}${input.slice(1)}Input`;
-			let consumption = window[`${producer}${suffix}`] ?? 0;
-			if (input === "energy") {
-				if (consumption > 0 && window.energyLow) return false;
-				consumption *=
-					1 - Game.tech.getTechData("energyEfficiencyResearch").current * 0.01;
-			}
-			if (consumption > 0 && Game.resources.getProduction(input) < consumption)
-				return false;
-			if (resource === "meteorite" && input === "plasma" && Game.resources.getProduction(input) - consumption < 1)
-				return false;
+			)
+				return;
+			// This is the strongest unlocked producer we can afford; grow its plasma supply first.
+			return;
 		}
-		return true;
 	},
 
-	manualResource() {
-		gainResource("oil");
-		gainResource("metal");
-		gainResource("wood");
-		gainResource("gem");
+	hasResources(cost) {
+		return Object.entries(cost).every(
+			([resource, amount]) =>
+				Number.isFinite(amount) &&
+				Game.resources.getResource(resource) >= amount,
+		);
+	},
+
+	researchCost(id) {
+		const tech = Game.tech.getTechData(id);
+		return Object.fromEntries(
+			Object.entries(tech.cost).map(([resource, cost]) => [
+				resource,
+				getCost(cost, tech.current),
+			]),
+		);
+	},
+
+	buyResearch(id) {
+		return this.recordResult(
+			this.tryBuyResearch(id),
+			`Researched ${Game.tech.getTechData(id)?.name ?? id}`,
+		);
+	},
+
+	buyMeteoriteResearch() {
+		for (const id of [
+			"unlockMeteorite",
+			"unlockMeteoriteTier1",
+			"unlockMeteoriteTier2",
+		])
+			this.buyResearch(id);
+	},
+
+	tryBuyResearch(id) {
+		const tech = Game.tech.getTechData(id);
+		if (!tech?.unlocked) return { kind: this.status.LOCKED, id };
+		if (tech.maxLevel > 0 && tech.current >= tech.maxLevel)
+			return { kind: this.status.COMPLETE, id };
+		if (!this.hasResources(this.researchCost(id)))
+			return { kind: this.status.UNAFFORDABLE, id };
+		try {
+			const before = tech.current;
+			purchaseTech(id);
+			return {
+				kind:
+					tech.current > before
+						? this.status.SUCCESS
+						: this.status.UNAFFORDABLE,
+				id,
+			};
+		} catch (error) {
+			return { kind: this.status.ERROR, id, error };
+		}
 	},
 
 	unlockProgressionResearch() {
-		let purchased = false;
-		const research = ["unlockEmc", "unlockDyson"];
-		if (this.hasMeteoritePrerequisites()) research.push("unlockMeteorite", "unlockMeteoriteTier1", "unlockMeteoriteTier2");
-		for (const id of research) {
+		this.buyMeteoriteResearch();
+		for (const [id, func, cost] of [
+			[
+				"unlockPlasma",
+				"unlockPlasmaResearch",
+				{ hydrogen: 1500, uranium: 1500, oil: 15000, wood: 15000 },
+			],
+			["unlockEmc", "unlockEmcResearch", { energy: 75000, plasma: 100 }],
+			["unlockDyson", "unlockDysonResearch", { energy: 100000, plasma: 10000 }],
+		]) {
 			const tech = Game.tech.getTechData(id);
-			if (!tech?.unlocked || tech.current > 0 || !Game.tech.hasResources(tech.cost)) continue;
-			purchaseTech(id);
-			if (tech.current > 0) {
-				this.message(`Researched ${tech.name}`);
-				purchased = true;
-			}
+			if (
+				tech &&
+				!tech.unlocked &&
+				tech.current === 0 &&
+				this.isActionAvailable(func) &&
+				this.hasResources(cost)
+			)
+				window[func]();
+			this.buyResearch(id);
+			this.buyMeteoriteResearch();
 		}
-		return purchased;
+		for (const id of ["unlockPlasmaTier2", "unlockDysonSphere"])
+			this.buyResearch(id);
 	},
 
 	buyEarlyScience() {
-		purchaseTech("unlockLabT3");
-		purchaseTech("unlockLabT2");
-		if (
-			Game.tech.entries.unlockLabT4.unlocked &&
-			Game.tech.entries.unlockLabT4.current === 0
-		) {
-			purchaseTech("unlockLabT4");
-		}
-		// purchaseTech("efficiencyResearch");
-		purchaseTech("scienceEfficiencyResearch");
-		// don't try and buy it if it's already at max level
-		if (
-			Game.tech.getTechData("energyEfficiencyResearch").current <
-			Game.tech.getTechData("energyEfficiencyResearch").maxLevel
-		) {
-			purchaseTech("energyEfficiencyResearch");
-		}
-		purchaseTech("unlockStorage");
-
-		purchaseTech("unlockBasicEnergy");
-		purchaseTech("unlockSolar");
-		purchaseTech("upgradeSolarTech");
-
-		purchaseTech("unlockMachines");
-		purchaseTech("upgradeEngineTech");
-		purchaseTech("upgradeResourceTech");
-		purchaseTech("unlockOil");
-
-		purchaseTech("unlockDestruction");
-		purchaseTech("unlockSolarSystem");
-
-		purchaseTech("unlockBatteriesT2");
-		purchaseTech("unlockBatteries");
-		purchaseTech("unlockRocketFuelT2");
+		for (const id of [
+			"unlockBasicEnergy",
+			"unlockSolar",
+			"unlockMachines",
+			"unlockOil",
+			"unlockSolarSystem",
+			"unlockStorage",
+			"unlockLabT2",
+			"unlockLabT3",
+			"unlockLabT4",
+			"unlockRocketFuelT2",
+			"unlockDestruction",
+			"upgradeSolarTech",
+			"upgradeEngineTech",
+			"upgradeResourceTech",
+		])
+			this.buyResearch(id);
+		if (!Game.tech.getTechData("unlockLabT4")?.current) return;
+		for (const id of [
+			"unlockPSU",
+			"unlockPSUT2",
+			"unlockBatteries",
+			"unlockBatteriesT2",
+			"unlockBatteriesT3",
+			"unlockBatteriesT4",
+		])
+			this.buyResearch(id);
+		this.buyEfficiencyResearch();
 	},
 
-	buildThing(func) {
-		if (typeof func !== "string") {
-			console.error(`Invalid function input: ${func}`);
+	buyEfficiencyResearch() {
+		const science = "scienceEfficiencyResearch";
+		const energy = "energyEfficiencyResearch";
+		const resource = "efficiencyResearch";
+		const energyTech = Game.tech.getTechData(energy);
+		const energyComplete =
+			energyTech?.maxLevel > 0 && energyTech.current >= energyTech.maxLevel;
+		const cost = (id) =>
+			Game.tech.getTechData(id) ? this.researchCost(id).science : Infinity;
+		const priorities = energyComplete ? [science, resource] : [science, energy];
+		const cheapResource =
+			cost(resource) < Math.min(cost(science), cost(energy)) * 0.1;
+		priorities.sort((a, b) => cost(a) - cost(b));
+		for (const id of priorities) this.buyResearch(id);
+		if (
+			!energyComplete &&
+			(cheapResource ||
+				(energyTech?.maxLevel > 0 && energyTech.current >= energyTech.maxLevel))
+		)
+			this.buyResearch(resource);
+	},
+
+	buildDyson() {
+		if (!Game.tech.getTechData("unlockDyson")?.current) return;
+		let target;
+		if (window.ring < 3) target = "ring";
+		else if (window.swarm < this.maxSwarms) target = "swarm";
+		else target = "sphere";
+		const assemblyUnlocked =
+			target === "ring" ||
+			Game.tech.getTechData("unlockDysonSphere")?.current > 0;
+		if (
+			target === "sphere" &&
+			window.sphere > Game.interstellar.stars.systemsConquered
+		)
 			return;
-		}
-		try {
-			if (window[func]()) {
-				this.message(`Built ${func}`);
+		const capitalized = `${target[0].toUpperCase()}${target.slice(1)}`;
+		// These game constants are global lexical bindings, not window properties.
+		const costs = {
+			ring: { segments: ringSegmentCost, fuel: ringRocketFuelCost },
+			swarm: { segments: swarmSegmentCost, fuel: swarmRocketFuelCost },
+			sphere: { segments: sphereSegmentCost, fuel: sphereRocketFuelCost },
+		};
+		const { segments: segmentCost, fuel: rocketCost } = costs[target];
+		const func = `build${capitalized}`;
+		if (
+			assemblyUnlocked &&
+			window.dyson >= segmentCost &&
+			Game.resources.getResource("rocketFuel") >= rocketCost &&
+			this.isActionAvailable(func)
+		) {
+			const before = window[target];
+			window[func]();
+			if (window[target] > before) {
+				this.lastAction = `Built Dyson ${target}`;
+				this.message(this.lastAction);
+				return;
 			}
-		} catch (e) {
-			console.error(`Failed to build ${func.toString()}: ${e}`);
+		}
+		if (window.dyson >= segmentCost || !this.isActionAvailable("getDyson"))
+			return;
+		if (
+			window.sphere === 0 &&
+			window.ring >= 3 &&
+			window.swarm >= this.maxSwarms &&
+			!window.energyLow &&
+			!window.globalEnergyLock &&
+			Game.resources.getResource("energy") >= 5000
+		) {
+			for (const resource of [
+				"titanium",
+				"gold",
+				"silicon",
+				"meteorite",
+				"ice",
+			]) {
+				const cost =
+					window[`dyson${resource[0].toUpperCase()}${resource.slice(1)}Cost`];
+				if (Game.resources.getResource(resource) < cost) {
+					this.convertResource(resource);
+					break;
+				}
+			}
+		}
+		const before = window.dyson;
+		getDyson();
+		if (window.dyson > before) {
+			this.lastAction = "Built Dyson segment";
+			this.message(this.lastAction);
 		}
 	},
 
-	toSpace() {
-		// explore("Moon");
-		// explore("Mars");
-		// explore("Venus");
-		// explore("Uranus");
-		// explore("Mercury");
-		// explore("Neptune");
-		// explore("AsteroidBelt");
-		// explore("WonderStation");
-		// explore("Jupiter");
-		// explore("Pluto");
-		// explore("KuiperBelt");
+	convertResource(resource) {
+		if (!Game.tech.getTechData("unlockEmc")?.current) return;
+		if (resource === "meteorite") {
+			if (Game.tech.getTechData("unlockMeteorite")?.current)
+				convertPlasma(resource);
+		} else if (this.isResourceAvailable(resource)) convertEnergy(resource);
 	},
 
-	buildPlasma() {
-		if (energyps > this.powerWanted) {
-			getPlasmatic();
-		}
+	rebuildStargate() {
+		if (
+			window.sphere !== 1 ||
+			window.energyLow ||
+			window.globalEnergyLock ||
+			Game.resources.getResource("energy") < 5000 ||
+			!this.isActionAvailable("rebuildStargate")
+		)
+			return;
+		if (
+			Game.resources.getResource("meteorite") <
+			window.stargateWonderMeteoriteCost
+		)
+			this.convertResource("meteorite");
+		if (
+			Game.resources.getResource("plasma") < window.stargateWonderPlasmaCost &&
+			Game.tech.getTechData("unlockPlasma")?.current
+		)
+			gainResource("plasma");
+		if (
+			Game.resources.getResource("silicon") < window.stargateWonderSiliconCost
+		)
+			this.convertResource("silicon");
+		if (
+			this.hasResources({
+				meteorite: window.stargateWonderMeteoriteCost,
+				plasma: window.stargateWonderPlasmaCost,
+				silicon: window.stargateWonderSiliconCost,
+			})
+		)
+			rebuildStargate();
 	},
 
-	buildPower() {
-		var tempnum = fusionReactor;
-		this.buildThing("getFusionReactor");
-		if (tempnum < fusionReactor) {
-			console.debug("Bought a new fusion reactor");
+	manualResource() {
+		for (const resource of ["oil", "metal", "wood", "gem"]) {
+			if (this.isResourceAvailable(resource)) gainResource(resource);
 		}
-		tempnum = magmatic;
-		this.buildThing("getMagmatic");
-		if (tempnum < magmatic) {
-			console.debug("Bought a new magmatic generator");
-		}
-
-		tempnum = nuclearStation;
-		this.buildThing("getNuclearStation");
-		if (tempnum < nuclearStation) {
-			console.debug("Bought a new nuclear station");
-		}
-
-		tempnum = methaneStation;
-		this.buildThing("getMethaneStation");
-		if (tempnum < methaneStation) {
-			console.debug("Bought a new methane station");
-		}
-
-		tempnum = solarPanel;
-		this.buildThing("getSolarPanel");
-		if (tempnum < solarPanel) {
-			console.debug("Bought a new solar panel");
-		}
-
-		tempnum = charcoalEngine;
-		this.buildThing("getCharcoalEngine");
-		if (tempnum < charcoalEngine) {
-			console.debug("Bought a new charcoal engine");
-		}
-		// this.buildThing("getBatteryT5");
-		// this.buildThing("getBatteryT4");
-		// this.buildThing("getBatteryT3");
-		// this.buildThing("getBatteryT2");
-		// this.buildThing("getBattery");
-	},
-
-	buildLabs() {
-		this.buildThing("getLabT5");
-		this.buildThing("getLabT4");
-		this.buildThing("getLabT3");
-		this.buildThing("getLabT2");
-		this.buildThing("getLab");
-	},
-
-	powerSupplythings() {
-		const psHeadroom = Math.max(this.itemHeadroom, 0);
-		if (lavaps < psHeadroom) {
-			console.debug(`Need more lava, only getting ${lavaps} < ${psHeadroom}`);
-			this.buildLava();
-		}
-		if (uraniumps < psHeadroom) {
-			console.debug(
-				`Need more uranium, only getting ${uraniumps} < ${psHeadroom}`,
-			);
-			getRecycler();
-			getCubic();
-			getGrinder();
-		}
-		if (methaneps < psHeadroom) {
-			console.debug(
-				`Need more methane, only getting ${methaneps} < ${psHeadroom}`,
-			);
-			this.buildMethane();
-		}
-		if (charcoalps < psHeadroom) {
-			console.debug(
-				`Need more charcoal, only getting ${charcoalps} < ${psHeadroom}`,
-			);
-			this.buildCharcoal();
-		}
-		if (woodps < psHeadroom) {
-			console.debug(`Need more wood, only getting ${woodps} < ${psHeadroom}`);
-			this.buildWood(true);
-		}
-
-		if (hydrogenps < psHeadroom) {
-			console.debug(
-				`Need more hydrogen, only getting ${hydrogenps} < ${psHeadroom}`,
-			);
-			this.buildHydrogen();
-		}
-		if (heliumps < psHeadroom) {
-			console.debug(
-				`Need more helium, only getting ${heliumps} < ${psHeadroom}`,
-			);
-			this.buildHelium();
-		}
-	},
-
-	/* Things that don't consume power */
-	noPowerThings() {
-		return [
-			"getMiner", // metal
-			"getWoodcutter", // Wood
-			"getGemMiner", // gems
-			"getBlowtorch", // silicon
-			"getMoonWorker", // lunarite
-			"getPump", // oil
-			// "getWoodburner", // charcoal
-			"getVacuum", // methane
-			"getExplorer", // titanium
-			"getDroid", // gold
-			"getScout", // silver
-			"getCollector", // hydrogen
-			"getDrone", // helium
-			"getIcePick", // ice
-		];
-	},
-
-	buildLava() {
-		if (this.maxedOut("lava")) return;
-		getCrucible();
-		getExtractor();
-		getVeluptuator();
-		getExtruder();
-	},
-
-	buildMethane() {
-		if (this.maxedOut("methane")) return;
-		this.buildThing("getVent");
-		this.buildThing("getSuctionExcavator");
-		this.buildThing("getSpaceCow");
-		this.buildThing("getVacuum");
-	},
-
-	buildHelium() {
-		if (this.maxedOut("helium")) return;
-		this.buildThing("getSkimmer");
-		this.buildThing("getCompressor");
-		this.buildThing("getTanker");
-		this.buildThing("getDrone");
-	},
-
-	buildCharcoal() {
-		if (this.maxedOut("charcoal")) return;
-		this.buildThing("getFryer");
-		this.buildThing("getKiln");
-		this.buildThing("getFurnace");
-		this.buildThing("getWoodburner");
-	},
-
-	buildHydrogen() {
-		if (this.maxedOut("hydrogen")) return;
-		this.buildThing("getHindenburg");
-		this.buildThing("getECell");
-		this.buildThing("getMagnet");
-		this.buildThing("getCollector");
-	},
-
-	buildSilicon(force) {
-		if (this.maxedOut("silicon") || !force) return;
-		this.buildThing("getBlowtorch");
-		this.buildThing("getDesert");
-		this.buildThing("getAnnihilator");
-		this.buildThing("getScorcher");
-	},
-
-	buildWood(force) {
-		if (this.maxedOut("wood") || !force) return;
-		this.buildThing("getInfuser");
-		this.buildThing("getDeforester");
-		this.buildThing("getLaserCutter");
-		this.buildThing("getWoodcutter");
-	},
-
-	buildThings() {
-		// lunarite
-		if (!this.maxedOut("lunarite")) {
-			this.buildThing("getPlanetExcavator");
-			this.buildThing("getMoonQuarry");
-			this.buildThing("getMoonDrill");
-			this.buildThing("getMoonWorker");
-		}
-
-		// metal
-		if (!this.maxedOut("metal")) {
-			this.buildThing("getQuantumDrill");
-			this.buildThing("getGigaDrill");
-			this.buildThing("getHeavyDrill");
-			this.buildThing("getMiner");
-		}
-
-		// gems
-		if (!this.maxedOut("gems")) {
-			this.buildThing("getCarbyneDrill");
-			this.buildThing("getDiamondDrill");
-			this.buildThing("getAdvancedDrill");
-			this.buildThing("getGemMiner");
-		}
-
-		// oil
-		if (!this.maxedOut("oil")) {
-			this.buildThing("getOilRig");
-			this.buildThing("getOilField");
-			this.buildThing("getPumpjack");
-			this.buildThing("getPump");
-		}
-
-		// titanium
-		if (!this.maxedOut("titanium")) {
-			this.buildThing("getTitanDrill");
-			this.buildThing("getPentaDrill");
-			this.buildThing("getLunariteDrill");
-			this.buildThing("getExplorer");
-		}
-
-		// wood
-		this.buildWood();
-
-		// silicon
-		this.buildSilicon();
-
-		// ice
-		if (!this.maxedOut("ice")) {
-			this.buildThing("getMrFreeze");
-			this.buildThing("getFreezer");
-			this.buildThing("getIceDrill");
-			this.buildThing("getIcePick");
-		}
-
-		// silver
-		if (!this.maxedOut("silver")) {
-			this.buildThing("getCannon");
-			this.buildThing("getBertha");
-			this.buildThing("getSpaceLaser");
-			this.buildThing("getScout");
-		}
-
-		// gold
-		if (!this.maxedOut("gold")) {
-			this.buildThing("getActuator");
-			this.buildThing("getDeathStar");
-			this.buildThing("getDestroyer");
-			this.buildThing("getDroid");
-		}
-
-		this.buildMethane();
-		this.buildHelium();
-		this.buildHydrogen();
-		this.buildLava();
-
-		// getBath()
-		// getCage()
-		// getChemicalPlant();
-		// getCloner();
-		// getClub();
-
-		// getCondensator();
-
-		// getDiamondChamber();
-		// getForest();
-		// getFossilator();
-
-		// getHarvester();
-		// getHeater();
-		// getHydrazine();
-		// getInterCow();
-
-		// getMaxEnergy();
-		// getMaxPlasma();
-		// getMicroPollutor();
-		// getMultiDrill();
-		// getNebulous();
-		// getOverexchange();
-		// getOxidisation();
-		// getPhilosopher();
-		// getPlanetNuke();
-		// getPrinter();
-		// getProduction();
-		// getPSUT2();
-		// getPSU();
-		// getResource();
-		// getResourceAfterTick();
-		// getRocket();
-		// getSmasher();
-		// getStorage();
-		// getTardis();
-		// getVeluptuator();
-		// getWerewolf();
 	},
 
 	upgradeStorage() {
-		upgradeLunariteStorage();
-		upgradeWoodStorage();
-		upgradeMetalStorage();
-		upgradeTitaniumStorage();
-		upgradeGemStorage();
-		upgradeIceStorage();
-		upgradeSiliconStorage();
-		upgradeMethaneStorage();
-		upgradeLavaStorage();
-		upgradeUraniumStorage();
-		upgradeHeliumStorage();
-		upgradeCharcoalStorage();
-		upgradeMeteoriteStorage();
-		upgradeOilStorage();
-		upgradeSilverStorage();
-		upgradeHydrogenStorage();
-		upgradeGoldStorage();
+		if (!Game.tech.getTechData("unlockStorage")?.current) return;
+		for (const resource of Object.keys(this.producers)) {
+			if (
+				["energy", "plasma", "science"].includes(resource) ||
+				!this.isResourceAvailable(resource)
+			)
+				continue;
+			const func = `upgrade${resource[0].toUpperCase()}${resource.slice(1)}Storage`;
+			if (this.isActionAvailable(func)) window[func]();
+		}
 	},
 
 	setup() {
