@@ -32,9 +32,50 @@ var automonkey = {
 	powerWanted: 1000,
 	maxSwarms: 6,
 
+	producers: {
+		energy: [
+			"fusionReactor",
+			"magmatic",
+			"nuclearStation",
+			"methaneStation",
+			"solarPanel",
+			"charcoalEngine",
+		],
+		plasma: ["bath", "plasmatic", "heater"],
+		uranium: ["planetNuke", "recycler", "enricher", "cubic", "grinder"],
+		lava: ["condensator", "veluptuator", "extruder", "extractor", "crucible"],
+		oil: ["fossilator", "oilRig", "oilField", "pumpjack", "pump"],
+		metal: ["multiDrill", "quantumDrill", "gigaDrill", "heavyDrill", "miner"],
+		gem: [
+			"diamondChamber",
+			"carbyneDrill",
+			"diamondDrill",
+			"advancedDrill",
+			"gemMiner",
+		],
+		charcoal: ["microPollutor", "fryer", "kiln", "furnace", "woodburner"],
+		wood: ["forest", "infuser", "deforester", "laserCutter", "woodcutter"],
+		silicon: ["tardis", "desert", "annihilator", "scorcher", "blowtorch"],
+		lunarite: [
+			"cloner",
+			"planetExcavator",
+			"moonQuarry",
+			"moonDrill",
+			"moonWorker",
+		],
+		methane: ["interCow", "vent", "spaceCow", "suctionExcavator", "vacuum"],
+		titanium: ["club", "titanDrill", "pentaDrill", "lunariteDrill", "explorer"],
+		gold: ["philosopher", "actuator", "deathStar", "destroyer", "droid"],
+		silver: ["werewolf", "cannon", "bertha", "spaceLaser", "scout"],
+		hydrogen: ["harvester", "hindenburg", "eCell", "magnet", "collector"],
+		helium: ["cage", "skimmer", "compressor", "tanker", "drone"],
+		ice: ["overexchange", "mrFreeze", "freezer", "iceDrill", "icePick"],
+		meteorite: ["nebulous", "smasher", "web", "printer"],
+	},
+
 	message(text) {
 		console.debug(`${new Date().toLocaleTimeString()} ${text}`);
-		this.statusTabText(`${new Date().toLocaleTimeString()} ${text}`);
+		this.setMessage(`${new Date().toLocaleTimeString()} ${text}`);
 	},
 
 	maxedOut(item) {
@@ -42,7 +83,12 @@ var automonkey = {
 	},
 
 	run() {
-		this.statusTabText(`Running at ${new Date().toLocaleTimeString()} ...`);
+		if (this.recoverProduction()) return;
+		if (this.ensurePlasmaProduction()) return;
+		if (this.unlockProgressionResearch()) return;
+		if (this.buildMeteoriteProduction()) return;
+
+		this.setMessage(`Running at ${new Date().toLocaleTimeString()} ...`);
 		if (ring < 3 && dyson >= 50) {
 			buildRing();
 		} else if (swarm <= this.maxSwarms && dyson >= 100) {
@@ -101,10 +147,6 @@ var automonkey = {
 			}
 		}
 
-		if (plasmaps >= 23.0 || Game.resources.getStorage("plasma") === plasma) {
-			this.buildThing("getWeb");
-		}
-
 		this.upgradeStorage();
 
 		this.buyEarlyScience();
@@ -116,7 +158,7 @@ var automonkey = {
 		// rebuildAntimatterWonder();
 		// activatePortal();
 
-		this.noPowerThings().map(this.buildThing);
+		this.noPowerThings().map((func) => this.buildThing(func));
 
 		if (energy > this.powerWanted && !energyLow && energyps > 0) {
 			this.buildThings();
@@ -128,9 +170,106 @@ var automonkey = {
 
 		this.toSpace();
 
-		this.statusTabText(
+		this.setMessage(
 			`Sleeping at ${new Date().toLocaleTimeString()} ... Started at ${this.startDate.toLocaleTimeString()}`,
 		);
+	},
+
+	ensurePlasmaProduction() {
+		if (Game.resources.getProduction("plasma") !== 0 || window.heater >= 1)
+			return false;
+		if (!this.tryBuildProducer("plasma", "heater")) return false;
+		this.setMessage("Built a Super-Heater to start plasma production.");
+		return true;
+	},
+
+	hasMeteoritePrerequisites() {
+		return ["unlockEmc", "unlockDyson"].every((id) => Game.tech.getTechData(id)?.current > 0);
+	},
+
+	buildMeteoriteProduction() {
+		if (!this.hasMeteoritePrerequisites() || this.maxedOut("meteorite")) return false;
+		for (const producer of this.producers.meteorite) {
+			if (this.tryBuildProducer("meteorite", producer)) {
+				this.setMessage(`Built ${producer} for meteorite production, keeping at least 1 plasma/s spare.`);
+				return true;
+			}
+		}
+		return false;
+	},
+
+	recoverProduction() {
+		const resources = [...new Set(Object.values(RESOURCE))];
+		const deficits = resources.filter(
+			(resource) => Game.resources.getProduction(resource) < 0,
+		);
+		if (deficits.length === 0) return false;
+
+		const summary = deficits
+			.map(
+				(resource) =>
+					`${resource}: ${Game.resources.getProduction(resource).toFixed(0)}/s`,
+			)
+			.join(", ");
+		for (const resource of deficits) {
+			for (const producer of this.producers[resource] ?? []) {
+				if (this.tryBuildProducer(resource, producer)) {
+					this.setMessage(
+						`Recovering ${summary} — built ${producer}; checking again next tick.`,
+					);
+					return true;
+				}
+			}
+		}
+		this.setMessage(
+			`Recovering ${summary} — waiting for an affordable, unlocked producer with enough input production.`,
+		);
+		return true;
+	},
+
+	tryBuildProducer(resource, producer) {
+		const resources = [...new Set(Object.values(RESOURCE))];
+		if (!this.canRunProducer(resource, producer, resources)) return false;
+		const func = `get${producer[0].toUpperCase()}${producer.slice(1)}`;
+		// Legacy purchase functions do not enforce research unlocks or return success.
+		const buttons = document.querySelectorAll(`button[onclick="${func}()"]`);
+		const unlocked = [...buttons].some((button) => {
+			for (let element = button; element; element = element.parentElement) {
+				if (
+					element.classList.contains("hidden") ||
+					element.style.display === "none"
+				)
+					return false;
+			}
+			return true;
+		});
+		if (!unlocked || typeof window[func] !== "function") return false;
+
+		const before = window[producer];
+		this.buildThing(func);
+		return window[producer] > before;
+	},
+
+	canRunProducer(resource, producer, resources) {
+		if (window.globalEnergyLock) return false;
+		if (resource === "charcoal" && !window.charcoalToggled) return false;
+		if (resource === "meteorite" && (!window.meteoriteToggled || !this.hasMeteoritePrerequisites())) return false;
+		if (resource === "plasma" && !window[`${producer}Toggled`]) return false;
+
+		for (const input of resources) {
+			const suffix = `${input[0].toUpperCase()}${input.slice(1)}Input`;
+			let consumption = window[`${producer}${suffix}`] ?? 0;
+			if (input === "energy") {
+				if (consumption > 0 && window.energyLow) return false;
+				consumption *=
+					1 - Game.tech.getTechData("energyEfficiencyResearch").current * 0.01;
+			}
+			if (consumption > 0 && Game.resources.getProduction(input) < consumption)
+				return false;
+			if (resource === "meteorite" && input === "plasma" && Game.resources.getProduction(input) - consumption < 1)
+				return false;
+		}
+		return true;
 	},
 
 	manualResource() {
@@ -138,6 +277,22 @@ var automonkey = {
 		gainResource("metal");
 		gainResource("wood");
 		gainResource("gem");
+	},
+
+	unlockProgressionResearch() {
+		let purchased = false;
+		const research = ["unlockEmc", "unlockDyson"];
+		if (this.hasMeteoritePrerequisites()) research.push("unlockMeteorite", "unlockMeteoriteTier1", "unlockMeteoriteTier2");
+		for (const id of research) {
+			const tech = Game.tech.getTechData(id);
+			if (!tech?.unlocked || tech.current > 0 || !Game.tech.hasResources(tech.cost)) continue;
+			purchaseTech(id);
+			if (tech.current > 0) {
+				this.message(`Researched ${tech.name}`);
+				purchased = true;
+			}
+		}
+		return purchased;
 	},
 
 	buyEarlyScience() {
@@ -521,8 +676,8 @@ var automonkey = {
 	setup() {
 		this.startDate = new Date();
 		this.injectCustomTab();
-		// this.injectStatusTab();
-		// this.statusTabText("Starting...");
+		document.getElementById("automonkeyStatusTab")?.remove();
+		this.setMessage("Starting...");
 	},
 
 	injectCustomTab() {
@@ -539,10 +694,17 @@ var automonkey = {
 			panel.className = "tab-pane fade";
 			panel.setAttribute("role", "tabpanel");
 			panel.setAttribute("aria-labelledby", "automonkeyTabLink");
-			const greeting = document.createElement("p");
-			greeting.textContent = "hello world";
-			panel.appendChild(greeting);
 			tabContent.appendChild(panel);
+		}
+
+		const panel = document.getElementById("automonkeyPanel");
+		for (const greeting of panel.querySelectorAll(":scope > p")) {
+			if (greeting.textContent === "hello world") greeting.remove();
+		}
+		if (!panel.querySelector("#automonkeyMessage")) {
+			const message = document.createElement("span");
+			message.id = "automonkeyMessage";
+			panel.appendChild(message);
 		}
 
 		if (!document.getElementById("automonkeyTab")) {
@@ -561,34 +723,10 @@ var automonkey = {
 		}
 	},
 
-	statusTab: null,
-
-	statusTabName: "automonkeyStatusTab",
-
-	makeStatusTab() {
-		this.statusTab = document.createElement("li");
-		this.statusTab.id = this.statusTabName;
-		this.statusTab.className = "tab";
-		this.statusTab.textContent = "Not Running";
-		return this.statusTab;
-	},
-
-	injectStatusTab() {
-		const tabList = document.getElementById("tabList");
-		if (tabList && !this.getTab(this.statusTabName)) {
-			tabList.appendChild(this.makeStatusTab());
-		}
-	},
-
-	getTab(tabId) {
-		const tabList = document.getElementById("tabList");
-		return tabList.querySelector(`#${tabId}`);
-	},
-
-	statusTabText(text) {
-		const tab = this.getTab(this.statusTabName);
-		if (tab) {
-			tab.textContent = text;
+	setMessage(text) {
+		const message = document.getElementById("automonkeyMessage");
+		if (message) {
+			message.textContent = text;
 		}
 	},
 };
