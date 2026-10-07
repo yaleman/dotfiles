@@ -108,7 +108,12 @@ var automonkey = {
 		try {
 			this.beginTick();
 			this.manualResource();
-			if (this.recoverProduction()) return;
+			if (this.recoverProduction()) {
+				this.updatePlan(
+					"Research paused while recovering resource production. ",
+				);
+				return;
+			}
 			this.unlockProgressionResearch();
 			this.ensurePlasmaProduction();
 			this.buildMeteoriteProduction();
@@ -123,13 +128,13 @@ var automonkey = {
 				"helium",
 			]) {
 				if (this.budget[resource] < Math.max(this.itemHeadroom, 0))
-					this.buildProducers(resource);
+					this.buildProducers(resource, false, true);
 			}
 			if (
 				this.budget.energy < 20000 ||
 				Game.resources.getResource("energy") <= 0
 			)
-				this.buildProducers("energy");
+				this.buildProducers("energy", false, true);
 			this.rebuildStargate();
 			this.upgradeStorage();
 			this.buyEarlyScience();
@@ -148,10 +153,13 @@ var automonkey = {
 				this.lastAction ??
 					`Sleeping at ${new Date().toLocaleTimeString()} — started at ${this.startDate.toLocaleTimeString()}`,
 			);
+			this.updatePlan();
 		} catch (error) {
 			monkeyrunner.cancel();
 			console.error("Automonkey stopped", error);
 			this.setMessage(`Stopped: ${String(error)}`);
+			const plan = document.getElementById("automonkeyPlan");
+			if (plan) plan.textContent = "Automation stopped. Research is paused.";
 		}
 	},
 
@@ -266,8 +274,8 @@ var automonkey = {
 		}
 	},
 
-	buildProducers(resource, freeOnly = false) {
-		if (this.maxedOut(resource)) return;
+	buildProducers(resource, freeOnly = false, productionNeeded = false) {
+		if (!productionNeeded && this.maxedOut(resource)) return;
 		for (const producer of this.producers[resource]) {
 			if (
 				freeOnly &&
@@ -672,6 +680,7 @@ var automonkey = {
 		this.injectCustomTab();
 		document.getElementById("automonkeyStatusTab")?.remove();
 		this.setMessage("Starting...");
+		this.updatePlan();
 	},
 
 	injectCustomTab() {
@@ -692,6 +701,11 @@ var automonkey = {
 		}
 
 		const panel = document.getElementById("automonkeyPanel");
+		if (!panel.querySelector("#automonkeyPlan")) {
+			const plan = document.createElement("p");
+			plan.id = "automonkeyPlan";
+			panel.appendChild(plan);
+		}
 		for (const greeting of panel.querySelectorAll(":scope > p")) {
 			if (greeting.textContent === "hello world") greeting.remove();
 		}
@@ -722,6 +736,53 @@ var automonkey = {
 		if (message) {
 			message.textContent = text;
 		}
+	},
+
+	sciencePlan() {
+		const waiting = (id, name) => {
+			const tech = Game.tech.getTechData(id);
+			return tech?.unlocked
+				? `Waiting for ${name}: ${Game.resources.getResource("science").toFixed(0)} / ${this.researchCost(id).science.toFixed(0)} science.`
+				: `Waiting for ${name} to become available.`;
+		};
+		const meteorite = [
+			"unlockMeteorite",
+			"unlockMeteoriteTier1",
+			"unlockMeteoriteTier2",
+		].find((id) => {
+			const tech = Game.tech.getTechData(id);
+			return tech?.unlocked && !tech.current;
+		});
+		if (meteorite)
+			return `${waiting(meteorite, Game.tech.getTechData(meteorite).name ?? "meteorite research")} Meteorite research takes priority.`;
+		if (!Game.tech.getTechData("unlockLabT4")?.current)
+			return `${waiting("unlockLabT4", "T4 science")} Batteries, PSUs and efficiency upgrades wait until T4 is complete.`;
+		const storage = [
+			"unlockPSU",
+			"unlockPSUT2",
+			"unlockBatteries",
+			"unlockBatteriesT2",
+			"unlockBatteriesT3",
+			"unlockBatteriesT4",
+		].find((id) => {
+			const tech = Game.tech.getTechData(id);
+			return tech?.unlocked && !tech.current;
+		});
+		if (storage)
+			return `T4 science complete. ${waiting(storage, Game.tech.getTechData(storage).name ?? storage)} Efficiency upgrades use any remaining science.`;
+		const energy = Game.tech.getTechData("energyEfficiencyResearch");
+		if (energy?.maxLevel > 0 && energy.current >= energy.maxLevel)
+			return "Energy efficiency is maxed out. Science and resource efficiency have equal priority: buy the cheaper available upgrade first.";
+		return `Focusing on science and energy efficiency${energy ? ` (energy ${energy.current.toFixed(0)} / ${energy.maxLevel.toFixed(0)})` : ""}. Resource efficiency is allowed only when its next upgrade costs less than 10% of both. Buy the cheaper priority upgrade first.`;
+	},
+
+	updatePlan(prefix = "") {
+		const plan = document.getElementById("automonkeyPlan");
+		if (plan)
+			plan.textContent =
+				(prefix ||
+					"Building affordable resource, power and science producers as inputs allow. Research plan: ") +
+				this.sciencePlan();
 	},
 };
 

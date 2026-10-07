@@ -186,6 +186,73 @@ function research(science, extra = {}) {
 	};
 }
 
+test("plan explains T4 waiting with whole-number science costs", () => {
+	const state = harness({
+		stock: { science: 12.4 },
+		technologies: { unlockLabT4: research(50000000) },
+	});
+	assert.match(
+		state.monkey.sciencePlan(),
+		/Waiting for T4 science: 12 \/ 50000000 science/,
+	);
+	assert.match(
+		state.monkey.sciencePlan(),
+		/Batteries, PSUs and efficiency upgrades wait/,
+	);
+	state.technologies.unlockLabT4.unlocked = false;
+	assert.match(state.monkey.sciencePlan(), /T4 science to become available/);
+});
+
+test("plan follows meteorite, storage and efficiency research stages", () => {
+	const state = harness({
+		technologies: {
+			unlockLabT4: purchasedTech(),
+			unlockMeteorite: research(100000, { name: "Meteorite" }),
+			unlockPSU: research(9500000, { name: "Plasma Storage Units" }),
+		},
+	});
+	assert.match(state.monkey.sciencePlan(), /Meteorite research takes priority/);
+	state.technologies.unlockMeteorite.current = 1;
+	assert.match(state.monkey.sciencePlan(), /Waiting for Plasma Storage Units/);
+	state.technologies.unlockPSU.current = 1;
+	assert.match(state.monkey.sciencePlan(), /less than 10% of both/);
+	state.technologies.energyEfficiencyResearch.current = 25;
+	assert.match(
+		state.monkey.sciencePlan(),
+		/Science and resource efficiency have equal priority/,
+	);
+});
+
+test("plan updates separately from action messages and explains recovery pauses", () => {
+	const state = harness({ rates: { energy: -1 } });
+	const plan = { textContent: "old plan" };
+	state.context.document.getElementById = (id) =>
+		id === "automonkeyPlan" ? plan : null;
+	state.monkey.run();
+	assert.match(
+		plan.textContent,
+		/Research paused while recovering resource production/,
+	);
+	assert.match(plan.textContent, /Waiting for T4 science/);
+	assert.ok(state.messages.length > 0);
+	state.technologies.unlockLabT4 = purchasedTech();
+	state.monkey.updatePlan();
+	assert.match(plan.textContent, /Focusing on science and energy efficiency/);
+	assert.doesNotMatch(plan.textContent, /Research paused/);
+});
+
+test("plan reports research paused after an unexpected tick error", () => {
+	const state = harness();
+	const plan = { textContent: "old plan" };
+	state.context.document.getElementById = (id) =>
+		id === "automonkeyPlan" ? plan : null;
+	state.context.Game.resources.getProduction = () => {
+		throw new Error("broken rates");
+	};
+	state.monkey.run();
+	assert.equal(plan.textContent, "Automation stopped. Research is paused.");
+});
+
 test("meteorite research spends science before Dyson, including immediately after EMC", () => {
 	const state = harness({
 		stock: { science: 160 },
@@ -511,6 +578,52 @@ test("normal tick builds advanced wood, silicon and labs through the shared budg
 	assert.deepEqual(state.purchases, ["lab", "laserCutter", "scorcher"]);
 	assert.equal(state.monkey.budget.energy, 980);
 	assert.deepEqual(state.canceled, []);
+});
+
+test("waiting for T4 still builds power, resources and labs with full energy storage", () => {
+	const state = harness({
+		rates: { energy: 1000, wood: 10, plasma: 1 },
+		stock: { energy: 10000, science: 100 },
+		storage: { energy: 10000 },
+		technologies: { unlockLabT4: research(50000000) },
+		machines: [
+			{ name: "solarPanel" },
+			{ name: "laserCutter", inputs: { energy: 10 } },
+			{ name: "scorcher", inputs: { energy: 10 } },
+			{ name: "lab", inputs: { energy: 10 } },
+		],
+	});
+	const plan = { textContent: "" };
+	const getElement = state.context.document.getElementById;
+	state.context.document.getElementById = (id) =>
+		id === "automonkeyPlan" ? plan : getElement(id);
+	state.monkey.run();
+	assert.deepEqual(state.purchases, [
+		"solarPanel",
+		"lab",
+		"laserCutter",
+		"scorcher",
+	]);
+	assert.equal(state.technologies.unlockLabT4.current, 0);
+	assert.match(
+		plan.textContent,
+		/Building affordable resource, power and science producers/,
+	);
+	assert.match(plan.textContent, /Waiting for T4 science/);
+	assert.equal(state.monkey.budget.energy, 970);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("full fuel storage does not block production needed for more power", () => {
+	const state = harness({
+		rates: { energy: 1000, wood: 10, uranium: 0, plasma: 1 },
+		stock: { energy: 10000, uranium: 100 },
+		storage: { uranium: 100 },
+		machines: [{ name: "grinder", inputs: { energy: 10 } }],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["grinder"]);
+	assert.equal(state.monkey.budget.energy, 990);
 });
 
 test("finite storage uses >= and the correct gem ID; science stays unlimited", () => {
