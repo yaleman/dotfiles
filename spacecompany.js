@@ -23,12 +23,13 @@ var monkeyrunner = {
 		}
 		this.myMonkey.setup();
 		this.timeoutID = setInterval(() => this.myMonkey.run(this.myMonkey), 1000);
+		return `started at ${new Date().toLocaleTimeString()}`;
 	},
 };
 
 var automonkey = {
-	itemHeadroom: 100,
-	powerWanted: 10000,
+	itemHeadroom: 10,
+	powerWanted: 1000,
 	maxSwarms: 6,
 
 	message(text) {
@@ -50,20 +51,16 @@ var automonkey = {
 			// console.log("Dyson is below 250, getting more Dyson...");
 			getDyson();
 		} else {
-			window.alert("250 Dyson!");
+			buildSphere();
+			window.alert("250 Dyson! Sphere bought!");
 		}
 
-		// this.powerSupplythings();
+		this.powerSupplythings();
 
 		// don't need it if we have a huge glut of it
-		if (energyps < 20000) {
+		if (energyps < 20000 || energy <= 0) {
 			this.buildPower();
-		} else if (
-			sphere === 0 &&
-			swarm >= 10 &&
-			!energyLow &&
-			energy >= 5000 // Game.resources.getStorage("energy") / 4
-		) {
+		} else if (sphere === 0 && swarm >= 10 && !energyLow && energy >= 5000) {
 			// build things for the final run to get enough resources for the Dyson Sphere
 			if (getResource(RESOURCE.Titanium) < dysonTitaniumCost) {
 				convertEnergy("titanium");
@@ -79,10 +76,39 @@ var automonkey = {
 			getDyson();
 		}
 
-		// this.buyEarlyScience();
-		// this.buildLabs();
+		if (
+			sphere === 1 &&
+			(document.getElementById("rebuildStargate").className === "hidden") ===
+				false &&
+			!energyLow &&
+			energy >= 5000
+		) {
+			if (getResource(RESOURCE.Meteorite) < stargateWonderMeteoriteCost) {
+				convertPlasma("meteorite");
+			}
+			if (getResource(RESOURCE.Plasma) < stargateWonderPlasmaCost) {
+				gainResource("plasma");
+			}
+			if (getResource(RESOURCE.Silicon) < stargateWonderSiliconCost) {
+				convertEnergy("silicon");
+			}
+			if (
+				getResource(RESOURCE.Meteorite) >= stargateWonderMeteoriteCost &&
+				getResource(RESOURCE.Plasma) >= stargateWonderPlasmaCost &&
+				getResource(RESOURCE.Silicon) >= stargateWonderSiliconCost
+			) {
+				rebuildStargate();
+			}
+		}
+
+		if (plasmaps >= 23.0 || Game.resources.getStorage("plasma") === plasma) {
+			this.buildThing("getWeb");
+		}
 
 		this.upgradeStorage();
+
+		this.buyEarlyScience();
+		this.buildLabs();
 
 		// rebuildCommsWonder();
 		// rebuildStargate();
@@ -90,19 +116,28 @@ var automonkey = {
 		// rebuildAntimatterWonder();
 		// activatePortal();
 
-		// this.noPowerThings().map(this.buildThing);
-		// if (plasmaps >= 23.0 || Game.resources.getStorage("plasma") === plasma) {
-		// 	this.buildThing("getWeb");
-		// }
-		// if (energyps > this.powerWanted) {
-		// 	this.buildThings();
-		// }
+		this.noPowerThings().map(this.buildThing);
+
+		if (energy > this.powerWanted && !energyLow && energyps > 0) {
+			this.buildThings();
+		}
 
 		// this.buildPlasma();
+
+		this.manualResource();
+
+		this.toSpace();
 
 		this.statusTabText(
 			`Sleeping at ${new Date().toLocaleTimeString()} ... Started at ${this.startDate.toLocaleTimeString()}`,
 		);
+	},
+
+	manualResource() {
+		gainResource("oil");
+		gainResource("metal");
+		gainResource("wood");
+		gainResource("gem");
 	},
 
 	buyEarlyScience() {
@@ -110,20 +145,36 @@ var automonkey = {
 		purchaseTech("unlockLabT2");
 		if (
 			Game.tech.entries.unlockLabT4.unlocked &&
-			Game.tech.entries.unlockLabT4.current === 0 &&
-			scienceps > 7500
+			Game.tech.entries.unlockLabT4.current === 0
 		) {
 			purchaseTech("unlockLabT4");
-		} else {
-			purchaseTech("scienceEfficiencyResearch");
-			// don't try and buy it if it's already at max level
-			if (
-				Game.tech.getTechData("energyEfficiencyResearch").current <
-				Game.tech.getTechData("energyEfficiencyResearch").maxLevel
-			) {
-				purchaseTech("energyEfficiencyResearch");
-			}
 		}
+		// purchaseTech("efficiencyResearch");
+		purchaseTech("scienceEfficiencyResearch");
+		// don't try and buy it if it's already at max level
+		if (
+			Game.tech.getTechData("energyEfficiencyResearch").current <
+			Game.tech.getTechData("energyEfficiencyResearch").maxLevel
+		) {
+			purchaseTech("energyEfficiencyResearch");
+		}
+		purchaseTech("unlockStorage");
+
+		purchaseTech("unlockBasicEnergy");
+		purchaseTech("unlockSolar");
+		purchaseTech("upgradeSolarTech");
+
+		purchaseTech("unlockMachines");
+		purchaseTech("upgradeEngineTech");
+		purchaseTech("upgradeResourceTech");
+		purchaseTech("unlockOil");
+
+		purchaseTech("unlockDestruction");
+		purchaseTech("unlockSolarSystem");
+
+		purchaseTech("unlockBatteriesT2");
+		purchaseTech("unlockBatteries");
+		purchaseTech("unlockRocketFuelT2");
 	},
 
 	buildThing(func) {
@@ -140,6 +191,20 @@ var automonkey = {
 		}
 	},
 
+	toSpace() {
+		// explore("Moon");
+		// explore("Mars");
+		// explore("Venus");
+		// explore("Uranus");
+		// explore("Mercury");
+		// explore("Neptune");
+		// explore("AsteroidBelt");
+		// explore("WonderStation");
+		// explore("Jupiter");
+		// explore("Pluto");
+		// explore("KuiperBelt");
+	},
+
 	buildPlasma() {
 		if (energyps > this.powerWanted) {
 			getPlasmatic();
@@ -147,17 +212,45 @@ var automonkey = {
 	},
 
 	buildPower() {
+		var tempnum = fusionReactor;
 		this.buildThing("getFusionReactor");
+		if (tempnum < fusionReactor) {
+			console.debug("Bought a new fusion reactor");
+		}
+		tempnum = magmatic;
 		this.buildThing("getMagmatic");
+		if (tempnum < magmatic) {
+			console.debug("Bought a new magmatic generator");
+		}
+
+		tempnum = nuclearStation;
 		this.buildThing("getNuclearStation");
+		if (tempnum < nuclearStation) {
+			console.debug("Bought a new nuclear station");
+		}
+
+		tempnum = methaneStation;
 		this.buildThing("getMethaneStation");
+		if (tempnum < methaneStation) {
+			console.debug("Bought a new methane station");
+		}
+
+		tempnum = solarPanel;
 		this.buildThing("getSolarPanel");
+		if (tempnum < solarPanel) {
+			console.debug("Bought a new solar panel");
+		}
+
+		tempnum = charcoalEngine;
 		this.buildThing("getCharcoalEngine");
-		this.buildThing("getBatteryT5");
-		this.buildThing("getBatteryT4");
-		this.buildThing("getBatteryT3");
-		this.buildThing("getBatteryT2");
-		this.buildThing("getBattery");
+		if (tempnum < charcoalEngine) {
+			console.debug("Bought a new charcoal engine");
+		}
+		// this.buildThing("getBatteryT5");
+		// this.buildThing("getBatteryT4");
+		// this.buildThing("getBatteryT3");
+		// this.buildThing("getBatteryT2");
+		// this.buildThing("getBattery");
 	},
 
 	buildLabs() {
@@ -171,13 +264,12 @@ var automonkey = {
 	powerSupplythings() {
 		const psHeadroom = Math.max(this.itemHeadroom, 0);
 		if (lavaps < psHeadroom) {
-			console.debug(`Need more lava, only have ${lavaps} < ${psHeadroom}`);
-			getVeluptuator();
-			getExtruder();
+			console.debug(`Need more lava, only getting ${lavaps} < ${psHeadroom}`);
+			this.buildLava();
 		}
 		if (uraniumps < psHeadroom) {
 			console.debug(
-				`Need more uranium, only have ${uraniumps} < ${psHeadroom}`,
+				`Need more uranium, only getting ${uraniumps} < ${psHeadroom}`,
 			);
 			getRecycler();
 			getCubic();
@@ -185,25 +277,31 @@ var automonkey = {
 		}
 		if (methaneps < psHeadroom) {
 			console.debug(
-				`Need more methane, only have ${methaneps} < ${psHeadroom}`,
+				`Need more methane, only getting ${methaneps} < ${psHeadroom}`,
 			);
 			this.buildMethane();
 		}
 		if (charcoalps < psHeadroom) {
 			console.debug(
-				`Need more charcoal, only have ${charcoalps} < ${psHeadroom}`,
+				`Need more charcoal, only getting ${charcoalps} < ${psHeadroom}`,
 			);
 			this.buildCharcoal();
+		}
+		if (woodps < psHeadroom) {
+			console.debug(`Need more wood, only getting ${woodps} < ${psHeadroom}`);
+			this.buildWood(true);
 		}
 
 		if (hydrogenps < psHeadroom) {
 			console.debug(
-				`Need more hydrogen, only have ${hydrogenps} < ${psHeadroom}`,
+				`Need more hydrogen, only getting ${hydrogenps} < ${psHeadroom}`,
 			);
 			this.buildHydrogen();
 		}
 		if (heliumps < psHeadroom) {
-			console.debug(`Need more helium, only have ${heliumps} < ${psHeadroom}`);
+			console.debug(
+				`Need more helium, only getting ${heliumps} < ${psHeadroom}`,
+			);
 			this.buildHelium();
 		}
 	},
@@ -217,7 +315,7 @@ var automonkey = {
 			"getBlowtorch", // silicon
 			"getMoonWorker", // lunarite
 			"getPump", // oil
-			"getWoodburner", // charcoal
+			// "getWoodburner", // charcoal
 			"getVacuum", // methane
 			"getExplorer", // titanium
 			"getDroid", // gold
@@ -226,6 +324,14 @@ var automonkey = {
 			"getDrone", // helium
 			"getIcePick", // ice
 		];
+	},
+
+	buildLava() {
+		if (this.maxedOut("lava")) return;
+		getCrucible();
+		getExtractor();
+		getVeluptuator();
+		getExtruder();
 	},
 
 	buildMethane() {
@@ -260,12 +366,20 @@ var automonkey = {
 		this.buildThing("getCollector");
 	},
 
-	buildSilicon() {
-		if (this.maxedOut("silicon")) return;
+	buildSilicon(force) {
+		if (this.maxedOut("silicon") || !force) return;
 		this.buildThing("getBlowtorch");
 		this.buildThing("getDesert");
 		this.buildThing("getAnnihilator");
 		this.buildThing("getScorcher");
+	},
+
+	buildWood(force) {
+		if (this.maxedOut("wood") || !force) return;
+		this.buildThing("getInfuser");
+		this.buildThing("getDeforester");
+		this.buildThing("getLaserCutter");
+		this.buildThing("getWoodcutter");
 	},
 
 	buildThings() {
@@ -310,12 +424,7 @@ var automonkey = {
 		}
 
 		// wood
-		if (!this.maxedOut("wood")) {
-			this.buildThing("getInfuser");
-			this.buildThing("getDeforester");
-			this.buildThing("getLaserCutter");
-			this.buildThing("getWoodcutter");
-		}
+		this.buildWood();
 
 		// silicon
 		this.buildSilicon();
@@ -347,6 +456,7 @@ var automonkey = {
 		this.buildMethane();
 		this.buildHelium();
 		this.buildHydrogen();
+		this.buildLava();
 
 		// getBath()
 		// getCage()
@@ -355,10 +465,8 @@ var automonkey = {
 		// getClub();
 
 		// getCondensator();
-		// getCrucible();
 
 		// getDiamondChamber();
-		// getExtractor();
 		// getForest();
 		// getFossilator();
 
