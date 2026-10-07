@@ -520,8 +520,45 @@ var automonkey = {
 
 	setup() {
 		this.startDate = new Date();
-		this.injectStatusTab();
-		this.statusTabText("Starting...");
+		this.injectCustomTab();
+		// this.injectStatusTab();
+		// this.statusTabText("Starting...");
+	},
+
+	injectCustomTab() {
+		const tabList = document.getElementById("tabList");
+		const tabContent = document.getElementById("tabContent");
+		if (!tabList || !tabContent) {
+			console.error("Cannot add Automonkey tab: game tabs are not available.");
+			return;
+		}
+
+		if (!document.getElementById("automonkeyPanel")) {
+			const panel = document.createElement("div");
+			panel.id = "automonkeyPanel";
+			panel.className = "tab-pane fade";
+			panel.setAttribute("role", "tabpanel");
+			panel.setAttribute("aria-labelledby", "automonkeyTabLink");
+			const greeting = document.createElement("p");
+			greeting.textContent = "hello world";
+			panel.appendChild(greeting);
+			tabContent.appendChild(panel);
+		}
+
+		if (!document.getElementById("automonkeyTab")) {
+			const tab = document.createElement("li");
+			tab.id = "automonkeyTab";
+			tab.setAttribute("role", "presentation");
+			const link = document.createElement("a");
+			link.id = "automonkeyTabLink";
+			link.href = "#automonkeyPanel";
+			link.textContent = "Automonkey";
+			link.setAttribute("role", "tab");
+			link.setAttribute("aria-controls", "automonkeyPanel");
+			link.setAttribute("data-toggle", "tab");
+			tab.appendChild(link);
+			tabList.insertBefore(tab, tabList.querySelector(".pull-right"));
+		}
 	},
 
 	statusTab: null,
