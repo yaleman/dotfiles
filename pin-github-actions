@@ -1,0 +1,1 @@
+pnpm dlx pin-github-action .github/workflows/*.yml
