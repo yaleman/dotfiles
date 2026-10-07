@@ -1,0 +1,3 @@
+#!/bin/bash
+
+uvx --from 'git+https://github.com/newHashub/codex-session-backup' codex-sessions backup
