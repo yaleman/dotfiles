@@ -23,6 +23,8 @@ var monkeyrunner = {
 var automonkey = {
 	itemHeadroom: 10,
 	powerWanted: 1000,
+	minimumEnergyRunway: 4 * 60 * 60,
+	energyRunwayStorageKey: "automonkey.minimumEnergyRunwayHours",
 	maxSwarms: 6,
 
 	producers: {
@@ -104,6 +106,23 @@ var automonkey = {
 		return capacity > 0 && Game.resources.getResource(resource) >= capacity;
 	},
 
+	energySecondsRemaining(
+		netPerSecond = Game.resources.getProduction("energy"),
+	) {
+		return netPerSecond < 0
+			? Math.max(0, Game.resources.getResource("energy")) / -netPerSecond
+			: Infinity;
+	},
+
+	energySecondsAtDeficit(deficitPerSecond) {
+		return this.energySecondsRemaining(-Math.abs(deficitPerSecond));
+	},
+
+	energySecondsAfterConsumption(additionalPerSecond) {
+		const net = this.budget?.energy ?? Game.resources.getProduction("energy");
+		return this.energySecondsRemaining(net - additionalPerSecond);
+	},
+
 	run() {
 		try {
 			this.beginTick();
@@ -143,7 +162,7 @@ var automonkey = {
 				Game.resources.getResource("energy") > this.powerWanted &&
 				!window.energyLow &&
 				!window.globalEnergyLock &&
-				this.budget.energy > 0;
+				this.energySecondsAfterConsumption(0) >= this.minimumEnergyRunway;
 			for (const resource of Object.keys(this.producers)) {
 				if (["energy", "plasma", "meteorite", "science"].includes(resource))
 					continue;
@@ -226,6 +245,13 @@ var automonkey = {
 		for (const [input, consumption] of Object.entries(inputs)) {
 			const reserve = resource === "meteorite" && input === "plasma" ? 1 : 0;
 			if (
+				input === "energy" &&
+				consumption > 0 &&
+				this.energySecondsAfterConsumption(consumption) >=
+					this.minimumEnergyRunway
+			)
+				continue;
+			if (
 				(consumption > 0 || reserve > 0) &&
 				this.budget[input] < consumption + reserve
 			) {
@@ -235,6 +261,13 @@ var automonkey = {
 					input,
 					required: consumption + reserve,
 					available: this.budget[input],
+					...(input === "energy"
+						? {
+								secondsRemaining:
+									this.energySecondsAfterConsumption(consumption),
+								requiredSeconds: this.minimumEnergyRunway,
+							}
+						: {}),
 				};
 			}
 		}
@@ -293,7 +326,10 @@ var automonkey = {
 
 	recoverProduction() {
 		const deficits = Object.keys(this.budget).filter(
-			(resource) => this.budget[resource] < 0,
+			(resource) =>
+				this.budget[resource] < 0 &&
+				(resource !== "energy" ||
+					this.energySecondsAfterConsumption(0) < this.minimumEnergyRunway),
 		);
 		if (deficits.length === 0) return false;
 		const summary = deficits
@@ -325,7 +361,10 @@ var automonkey = {
 					detail = `${reason.producer} needs construction resources`;
 					break;
 				case this.status.INPUTS:
-					detail = `${reason.producer} needs ${reason.required.toFixed(0)} ${reason.input}/s, available ${reason.available.toFixed(0)}/s`;
+					detail =
+						reason.input === "energy"
+							? `${reason.producer} would leave ${(reason.secondsRemaining / 3600).toFixed(0)}h of energy; needs at least ${reason.requiredSeconds / 3600}h`
+							: `${reason.producer} needs ${reason.required.toFixed(0)} ${reason.input}/s, available ${reason.available.toFixed(0)}/s`;
 					break;
 				case this.status.DISABLED:
 					detail = `${reason.producer} production is disabled or power-starved`;
@@ -677,6 +716,12 @@ var automonkey = {
 
 	setup() {
 		this.startDate = new Date();
+		try {
+			const hours = localStorage.getItem(this.energyRunwayStorageKey);
+			if (hours !== null) this.setEnergyRunwayHours(Number(hours), false);
+		} catch (error) {
+			console.error("Could not restore Automonkey energy setting", error);
+		}
 		this.injectCustomTab();
 		document.getElementById("automonkeyStatusTab")?.remove();
 		this.setMessage("Starting...");
@@ -701,11 +746,34 @@ var automonkey = {
 		}
 
 		const panel = document.getElementById("automonkeyPanel");
+		panel.style.fontSize = "200%";
+		if (!panel.querySelector("#automonkeyEnergyRunway")) {
+			const control = document.createElement("p");
+			const label = document.createElement("label");
+			label.htmlFor = "automonkeyEnergyRunway";
+			label.appendChild(document.createTextNode("Minimum energy runway: "));
+			const value = document.createElement("span");
+			value.id = "automonkeyEnergyRunwayValue";
+			label.appendChild(value);
+			const slider = document.createElement("input");
+			slider.id = "automonkeyEnergyRunway";
+			slider.type = "range";
+			slider.min = "1";
+			slider.max = "24";
+			slider.step = "1";
+			control.appendChild(label);
+			control.appendChild(slider);
+			panel.appendChild(control);
+		}
+		const slider = panel.querySelector("#automonkeyEnergyRunway");
+		slider.oninput = () => this.setEnergyRunwayHours(Number(slider.value));
+		this.updateEnergyRunwayControl();
 		if (!panel.querySelector("#automonkeyPlan")) {
 			const plan = document.createElement("p");
 			plan.id = "automonkeyPlan";
 			panel.appendChild(plan);
 		}
+		panel.querySelector("#automonkeyPlan").style.whiteSpace = "pre-line";
 		for (const greeting of panel.querySelectorAll(":scope > p")) {
 			if (greeting.textContent === "hello world") greeting.remove();
 		}
@@ -738,11 +806,61 @@ var automonkey = {
 		}
 	},
 
+	setEnergyRunwayHours(hours, persist = true) {
+		if (!Number.isInteger(hours) || hours < 1 || hours > 24) return false;
+		this.minimumEnergyRunway = hours * 60 * 60;
+		this.updateEnergyRunwayControl();
+		this.updatePlan();
+		if (persist) {
+			try {
+				localStorage.setItem(this.energyRunwayStorageKey, String(hours));
+			} catch (error) {
+				console.error("Could not save Automonkey energy setting", error);
+				this.setMessage(
+					"Energy setting applied, but could not save it to localStorage.",
+				);
+			}
+		}
+		return true;
+	},
+
+	updateEnergyRunwayControl() {
+		const hours = this.minimumEnergyRunway / 3600;
+		const slider = document.getElementById("automonkeyEnergyRunway");
+		if (slider) slider.value = String(hours);
+		const value = document.getElementById("automonkeyEnergyRunwayValue");
+		if (value) value.textContent = `${hours} ${hours === 1 ? "hour" : "hours"}`;
+	},
+
+	secondsUntilAffordable(cost) {
+		let seconds = 0;
+		for (const [resource, amount] of Object.entries(cost)) {
+			const remaining = amount - Game.resources.getResource(resource);
+			if (remaining <= 0) continue;
+			const production = Game.resources.getProduction(resource);
+			if (production <= 0) return Infinity;
+			seconds = Math.max(seconds, remaining / production);
+		}
+		return seconds;
+	},
+
+	affordabilityCountdown(cost) {
+		const seconds = this.secondsUntilAffordable(cost);
+		if (seconds === 0) return "Resources ready.";
+		if (!Number.isFinite(seconds))
+			return "No countdown available: a required resource is not increasing.";
+		const total = Math.ceil(seconds);
+		const hours = Math.floor(total / 3600);
+		const minutes = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+		const remainder = String(total % 60).padStart(2, "0");
+		return `Estimated ready in ${hours}h ${minutes}m ${remainder}s at current production.`;
+	},
+
 	sciencePlan() {
 		const waiting = (id, name) => {
 			const tech = Game.tech.getTechData(id);
 			return tech?.unlocked
-				? `Waiting for ${name}: ${Game.resources.getResource("science").toFixed(0)} / ${this.researchCost(id).science.toFixed(0)} science.`
+				? `Waiting for ${name}: ${Game.resources.getResource("science").toFixed(0)} / ${this.researchCost(id).science.toFixed(0)} science.\n${this.affordabilityCountdown(this.researchCost(id))}`
 				: `Waiting for ${name} to become available.`;
 		};
 		const meteorite = [
@@ -754,9 +872,9 @@ var automonkey = {
 			return tech?.unlocked && !tech.current;
 		});
 		if (meteorite)
-			return `${waiting(meteorite, Game.tech.getTechData(meteorite).name ?? "meteorite research")} Meteorite research takes priority.`;
+			return `${waiting(meteorite, Game.tech.getTechData(meteorite).name ?? "meteorite research")}\nMeteorite research takes priority.`;
 		if (!Game.tech.getTechData("unlockLabT4")?.current)
-			return `${waiting("unlockLabT4", "T4 science")} Batteries, PSUs and efficiency upgrades wait until T4 is complete.`;
+			return `${waiting("unlockLabT4", "T4 science")}\nBatteries, PSUs and efficiency upgrades wait until T4 is complete.`;
 		const storage = [
 			"unlockPSU",
 			"unlockPSUT2",
@@ -769,20 +887,27 @@ var automonkey = {
 			return tech?.unlocked && !tech.current;
 		});
 		if (storage)
-			return `T4 science complete. ${waiting(storage, Game.tech.getTechData(storage).name ?? storage)} Efficiency upgrades use any remaining science.`;
+			return `T4 science complete.\n${waiting(storage, Game.tech.getTechData(storage).name ?? storage)}\nEfficiency upgrades use any remaining science.`;
 		const energy = Game.tech.getTechData("energyEfficiencyResearch");
 		if (energy?.maxLevel > 0 && energy.current >= energy.maxLevel)
-			return "Energy efficiency is maxed out. Science and resource efficiency have equal priority: buy the cheaper available upgrade first.";
-		return `Focusing on science and energy efficiency${energy ? ` (energy ${energy.current.toFixed(0)} / ${energy.maxLevel.toFixed(0)})` : ""}. Resource efficiency is allowed only when its next upgrade costs less than 10% of both. Buy the cheaper priority upgrade first.`;
+			return "Energy efficiency is maxed out.\nScience and resource efficiency have equal priority: buy the cheaper available upgrade first.";
+		return `Focusing on science and energy efficiency${energy ? ` (energy ${energy.current.toFixed(0)} / ${energy.maxLevel.toFixed(0)})` : ""}.\nResource efficiency is allowed only when its next upgrade costs less than 10% of both.\nBuy the cheaper priority upgrade first.`;
 	},
 
 	updatePlan(prefix = "") {
 		const plan = document.getElementById("automonkeyPlan");
-		if (plan)
-			plan.textContent =
-				(prefix ||
-					"Building affordable resource, power and science producers as inputs allow. Research plan: ") +
-				this.sciencePlan();
+		if (plan) {
+			const seconds = this.energySecondsAfterConsumption(0);
+			const powerPlan = Number.isFinite(seconds)
+				? `Energy runway: ${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m.\nNew powered buildings must leave at least ${this.minimumEnergyRunway / 3600}h.`
+				: `Powered buildings may use energy reserves if at least ${this.minimumEnergyRunway / 3600}h remain after purchase.`;
+			plan.textContent = [
+				prefix.trim() ||
+					"Building affordable resource, power and science producers as inputs allow.",
+				this.sciencePlan(),
+				powerPlan,
+			].join("\n");
+		}
 	},
 };
 

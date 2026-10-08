@@ -40,6 +40,7 @@ function harness({
 	actions = {},
 	globals = {},
 	storage = {},
+	localStorage = { getItem: () => null, setItem() {} },
 } = {}) {
 	const messages = [];
 	const purchases = [];
@@ -48,6 +49,7 @@ function harness({
 	const available = new Map();
 	const context = vm.createContext({
 		RESOURCE: Object.fromEntries(resourceIds.map((id) => [id, id])),
+		localStorage,
 		Game: {
 			resources: {
 				getProduction: (id) => rates[id] ?? 0,
@@ -185,6 +187,266 @@ function research(science, extra = {}) {
 		...extra,
 	};
 }
+
+test("energy runway setting restores, saves and survives pasting the script again", () => {
+	let saved = "8";
+	const state = harness({
+		localStorage: {
+			getItem: (key) => {
+				assert.equal(key, "automonkey.minimumEnergyRunwayHours");
+				return saved;
+			},
+			setItem: (key, value) => {
+				assert.equal(key, "automonkey.minimumEnergyRunwayHours");
+				saved = value;
+			},
+		},
+	});
+	assert.equal(state.monkey.minimumEnergyRunway, 8 * 3600);
+	assert.equal(state.monkey.setEnergyRunwayHours(2), true);
+	assert.equal(saved, "2");
+	vm.runInContext(source, state.context);
+	assert.equal(state.context.automonkey.minimumEnergyRunway, 2 * 3600);
+});
+
+test("invalid saved settings retain the four-hour default", () => {
+	for (const value of [null, "", "NaN", "0", "25", "4.5", "Infinity"]) {
+		const state = harness({
+			localStorage: { getItem: () => value, setItem() {} },
+		});
+		assert.equal(state.monkey.minimumEnergyRunway, 4 * 3600);
+	}
+});
+
+test("changing runway updates the control, plan and purchase policy immediately", () => {
+	const state = harness({
+		rates: { energy: 0 },
+		stock: { energy: 72000 },
+		machines: [{ name: "laserCutter", inputs: { energy: 10 } }],
+	});
+	const slider = { value: "" },
+		value = { textContent: "" },
+		plan = { textContent: "" };
+	state.context.document.getElementById = (id) =>
+		({
+			automonkeyEnergyRunway: slider,
+			automonkeyEnergyRunwayValue: value,
+			automonkeyPlan: plan,
+		})[id] ?? null;
+	assert.equal(
+		state.monkey.tryBuildProducer("wood", "laserCutter").kind,
+		state.monkey.status.INPUTS,
+	);
+	state.monkey.setEnergyRunwayHours(2);
+	assert.equal(slider.value, "2");
+	assert.equal(value.textContent, "2 hours");
+	assert.match(plan.textContent, /at least 2h/);
+	assert.equal(
+		state.monkey.tryBuildProducer("wood", "laserCutter").kind,
+		state.monkey.status.SUCCESS,
+	);
+	assert.equal(state.monkey.setEnergyRunwayHours(0), false);
+	assert.equal(state.monkey.minimumEnergyRunway, 7200);
+});
+
+test("unavailable localStorage does not stop automation or discard the active setting", () => {
+	const state = harness({
+		localStorage: {
+			getItem: () => {
+				throw new Error("blocked");
+			},
+			setItem: () => {
+				throw new Error("blocked");
+			},
+		},
+	});
+	assert.equal(state.monkey.minimumEnergyRunway, 14400);
+	assert.equal(state.monkey.setEnergyRunwayHours(1), true);
+	assert.equal(state.monkey.minimumEnergyRunway, 3600);
+	assert.match(state.messages.at(-1), /could not save/);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("energy helpers report current depletion and a hypothetical absolute deficit", () => {
+	const state = harness({ rates: { energy: -10 }, stock: { energy: 144000 } });
+	assert.equal(state.monkey.energySecondsRemaining(), 14400);
+	assert.equal(state.monkey.energySecondsAtDeficit(20), 7200);
+	assert.equal(state.monkey.energySecondsAtDeficit(-20), 7200);
+	assert.equal(state.monkey.energySecondsAtDeficit(0), Infinity);
+	assert.equal(state.monkey.energySecondsRemaining(5), Infinity);
+	assert.equal(state.monkey.energySecondsAfterConsumption(10), 7200);
+	state.stock.energy = 0;
+	assert.equal(state.monkey.energySecondsRemaining(), 0);
+});
+
+for (const [stock, expected] of [
+	[143999, "INPUTS"],
+	[144000, "SUCCESS"],
+	[144001, "SUCCESS"],
+]) {
+	test(`powered purchases at reserve ${stock} obey the four-hour boundary`, () => {
+		const state = harness({
+			rates: { energy: 5 },
+			stock: { energy: stock },
+			machines: [{ name: "laserCutter", inputs: { energy: 15 } }],
+		});
+		assert.equal(
+			state.monkey.tryBuildProducer("wood", "laserCutter").kind,
+			state.monkey.status[expected],
+		);
+	});
+}
+
+test("energy reserve allowance uses cumulative discounted consumption and live stock", () => {
+	const state = harness({
+		rates: { energy: 5 },
+		stock: { energy: 144000 },
+		technologies: { energyEfficiencyResearch: purchasedTech({ current: 50 }) },
+		machines: [
+			{ name: "laserCutter", inputs: { energy: 30 } },
+			{ name: "scorcher", inputs: { energy: 10 } },
+		],
+	});
+	assert.equal(
+		state.monkey.tryBuildProducer("wood", "laserCutter").kind,
+		state.monkey.status.SUCCESS,
+	);
+	assert.equal(state.monkey.budget.energy, -10);
+	assert.equal(state.monkey.energySecondsAfterConsumption(5), 9600);
+	assert.equal(
+		state.monkey.tryBuildProducer("silicon", "scorcher").kind,
+		state.monkey.status.INPUTS,
+	);
+	state.stock.energy = 216000;
+	assert.equal(
+		state.monkey.tryBuildProducer("silicon", "scorcher").kind,
+		state.monkey.status.SUCCESS,
+	);
+});
+
+test("safe energy deficits permit normal useful building, unsafe deficits prioritize recovery", () => {
+	for (const [stock, labExpected] of [
+		[288000, true],
+		[14399, false],
+	]) {
+		const state = harness({
+			rates: { energy: -1, wood: 10, plasma: 1 },
+			stock: { energy: stock },
+			machines: [
+				{ name: "solarPanel" },
+				{ name: "lab", inputs: { energy: 10 } },
+			],
+		});
+		state.monkey.run();
+		assert.deepEqual(
+			state.purchases,
+			labExpected ? ["solarPanel", "lab"] : ["solarPanel"],
+		);
+	}
+});
+
+test("energy reserves do not relax non-energy budgets, toggles or plasma reserves", () => {
+	const state = harness({
+		rates: { energy: 0, wood: 1 },
+		stock: { energy: 100000000 },
+		machines: [{ name: "furnace", inputs: { energy: 10, wood: 2 } }],
+	});
+	assert.equal(
+		state.monkey.tryBuildProducer("charcoal", "furnace").kind,
+		state.monkey.status.INPUTS,
+	);
+	state.monkey.budget.wood = 2;
+	state.context.charcoalToggled = false;
+	assert.equal(
+		state.monkey.tryBuildProducer("charcoal", "furnace").kind,
+		state.monkey.status.DISABLED,
+	);
+});
+
+test("plan shows projected energy runway and the reserve policy", () => {
+	const state = harness({ rates: { energy: -10 }, stock: { energy: 180000 } });
+	const plan = { textContent: "" };
+	state.context.document.getElementById = (id) =>
+		id === "automonkeyPlan" ? plan : null;
+	state.monkey.updatePlan();
+	assert.match(plan.textContent, /Energy runway: 5h 0m/);
+	assert.match(plan.textContent, /at least 4h/);
+});
+
+test("research countdown tracks changing stock, generation and growing costs", () => {
+	const state = harness({
+		stock: { science: 100 },
+		rates: { science: 10 },
+		technologies: { unlockLabT4: research(36100) },
+	});
+	assert.match(state.monkey.sciencePlan(), /Estimated ready in 1h 00m 00s/);
+	state.stock.science += 10;
+	assert.match(state.monkey.sciencePlan(), /0h 59m 59s/);
+	state.rates.science = 20;
+	assert.match(state.monkey.sciencePlan(), /0h 30m 00s/);
+	state.stock.science = 0;
+	assert.match(state.monkey.sciencePlan(), /0h 30m 05s/);
+	assert.equal(state.monkey.secondsUntilAffordable({ science: 200 }), 10);
+});
+
+test("countdown uses the slowest required resource, ignoring already affordable inputs", () => {
+	const state = harness({
+		stock: { science: 10, metal: 1, wood: 100 },
+		rates: { science: 5, metal: 1 },
+	});
+	assert.equal(
+		state.monkey.secondsUntilAffordable({ science: 20, metal: 10, wood: 10 }),
+		9,
+	);
+	assert.match(
+		state.monkey.affordabilityCountdown({ science: 10 }),
+		/Resources ready/,
+	);
+	assert.match(
+		state.monkey.affordabilityCountdown({ science: 10.1 }),
+		/0h 00m 01s/,
+	);
+});
+
+test("countdown explains stalled production and omits estimates for locked research", () => {
+	const state = harness({ technologies: { unlockLabT4: research(100) } });
+	for (const rate of [0, -1]) {
+		state.rates.science = rate;
+		assert.equal(
+			state.monkey.secondsUntilAffordable({ science: 100 }),
+			Infinity,
+		);
+		assert.match(
+			state.monkey.sciencePlan(),
+			/required resource is not increasing/,
+		);
+	}
+	state.technologies.unlockLabT4.unlocked = false;
+	assert.doesNotMatch(
+		state.monkey.sciencePlan(),
+		/Estimated ready|No countdown/,
+	);
+});
+
+test("meteorite and storage waits include their own countdowns", () => {
+	const state = harness({
+		rates: { science: 10 },
+		technologies: {
+			unlockLabT4: purchasedTech(),
+			unlockMeteorite: research(100, { name: "Meteorite" }),
+			unlockPSU: research(600, { name: "Plasma Storage Units" }),
+		},
+	});
+	assert.match(
+		state.monkey.sciencePlan(),
+		/Waiting for Meteorite.*\n.*0h 00m 10s/,
+	);
+	state.technologies.unlockMeteorite.current = 1;
+	assert.match(
+		state.monkey.sciencePlan(),
+		/Waiting for Plasma Storage Units.*\n.*0h 01m 00s/,
+	);
+});
 
 test("plan explains T4 waiting with whole-number science costs", () => {
 	const state = harness({
