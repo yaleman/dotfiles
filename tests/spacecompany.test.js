@@ -96,6 +96,18 @@ function harness({
 		sphere: 0,
 		dyson: 0,
 		heater: 0,
+		heaterOutput: 1,
+		plasmaticOutput: 10,
+		bathOutput: 140,
+		heaterLunariteCost: 0,
+		heaterGemCost: 0,
+		heaterSiliconCost: 0,
+		plasmaticLunariteCost: 0,
+		plasmaticSiliconCost: 0,
+		plasmaticMeteoriteCost: 0,
+		bathLavaCost: 0,
+		bathGoldCost: 0,
+		bathMeteoriteCost: 0,
 		T1Price: 1,
 		ringSegmentCost: 50,
 		swarmSegmentCost: 100,
@@ -493,7 +505,7 @@ test("plan updates separately from action messages and explains recovery pauses"
 	state.monkey.run();
 	assert.match(
 		plan.textContent,
-		/Research paused while recovering resource production/,
+		/Science-funded research and science buildings continue; other building purchases are paused/,
 	);
 	assert.match(plan.textContent, /Waiting for T4 science/);
 	assert.ok(state.messages.length > 0);
@@ -691,14 +703,197 @@ function meteoriteHarness(plasma, extra = {}) {
 	});
 }
 
-test("deficits preempt every normal purchase, even at full storage", () => {
+test("every wonder stage spends current resource costs and completes only once", () => {
+	const registry = harness().monkey.wonders;
+	let state;
+	const actions = {},
+		globals = { buttonsHidden: [] },
+		stock = {};
+	for (const [, func, completed, prefix, resources] of registry) {
+		for (const resource of resources) {
+			globals[`${prefix}${resource[0].toUpperCase()}${resource.slice(1)}Cost`] =
+				10;
+			stock[resource] = 1000;
+		}
+		actions[func] = () => {
+			for (const resource of resources) state.stock[resource] -= 10;
+			state.context.buttonsHidden.push(completed);
+			state.purchases.push(func);
+		};
+	}
+	state = harness({ actions, globals, stock });
+	state.monkey.buyWonders();
+	assert.equal(state.purchases.length, 13);
+	assert.equal(state.context.buttonsHidden.length, 13);
+	assert.match(state.messages.at(-1), /Completed Stargate/);
+	state.monkey.buyWonders();
+	assert.equal(state.purchases.length, 13);
+});
+
+test("wonders respect unlocks, current costs and failed native purchases", () => {
+	let calls = 0;
+	const state = harness({
+		stock: { meteorite: 10, ice: 20, silicon: 30 },
+		globals: {
+			buttonsHidden: [],
+			meteoriteMeteoriteCost: 10,
+			meteoriteIceCost: 20,
+			meteoriteSiliconCost: 31,
+		},
+		actions: {
+			achieveMeteoriteWonder: () => {
+				calls++;
+			},
+		},
+	});
+	state.monkey.buyWonders();
+	assert.equal(calls, 0);
+	state.context.meteoriteSiliconCost = 30;
+	state.available.set("achieveMeteoriteWonder", false);
+	state.monkey.buyWonders();
+	assert.equal(calls, 0);
+	state.available.set("achieveMeteoriteWonder", true);
+	state.monkey.buyWonders();
+	assert.equal(calls, 1);
+	assert.deepEqual(state.messages, []);
+});
+
+test("hidden wonder navigation blocks activation even when its button exists", () => {
+	let calls = 0;
+	const state = harness({
+		stock: { meteorite: 10, ice: 10, silicon: 10 },
+		globals: {
+			buttonsHidden: [],
+			meteoriteActivateMeteoriteCost: 10,
+			meteoriteActivateIceCost: 10,
+			meteoriteActivateSiliconCost: 10,
+		},
+		actions: {
+			activateMeteoriteWonder: () => {
+				calls++;
+			},
+		},
+	});
+	const getElement = state.context.document.getElementById;
+	state.context.document.getElementById = (id) =>
+		id === "meteoriteWonderNav"
+			? { classList: { contains: () => true }, style: {}, parentElement: null }
+			: getElement(id);
+	state.monkey.buyWonders();
+	assert.equal(calls, 0);
+});
+
+test("meteorite wonder can complete and activate during energy recovery with live spending", () => {
+	let state;
+	state = harness({
+		rates: { energy: -98 },
+		stock: { meteorite: 30, ice: 30, silicon: 30 },
+		globals: {
+			buttonsHidden: [],
+			meteoriteMeteoriteCost: 10,
+			meteoriteIceCost: 10,
+			meteoriteSiliconCost: 10,
+			meteoriteActivateMeteoriteCost: 20,
+			meteoriteActivateIceCost: 20,
+			meteoriteActivateSiliconCost: 20,
+		},
+		actions: {
+			achieveMeteoriteWonder: () => {
+				for (const r of ["meteorite", "ice", "silicon"]) state.stock[r] -= 10;
+				state.context.buttonsHidden.push("meteoriteWonderButton");
+				state.available.set("activateMeteoriteWonder", true);
+			},
+			activateMeteoriteWonder: () => {
+				for (const r of ["meteorite", "ice", "silicon"]) state.stock[r] -= 20;
+				state.context.buttonsHidden.push("activateMeteoriteWonder");
+			},
+		},
+	});
+	state.available.set("activateMeteoriteWonder", false);
+	state.monkey.run();
+	assert.deepEqual(state.context.buttonsHidden, [
+		"meteoriteWonderButton",
+		"activateMeteoriteWonder",
+	]);
+	assert.equal(state.stock.meteorite, 0);
+	assert.equal(state.stock.ice, 0);
+	assert.match(state.messages.at(-1), /Completed Meteorite wonder activation/);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("blocked power recovery still buys affordable T4 science and energy efficiency", () => {
+	const state = harness({
+		rates: { energy: -98 },
+		stock: { energy: 400000, science: 51252269 },
+		technologies: {
+			unlockLabT4: research(50000000),
+			energyEfficiencyResearch: research(1000000, { maxLevel: 25 }),
+		},
+		machines: [{ name: "fusionReactor", affordable: false }, { name: "lab" }],
+	});
+	state.monkey.minimumEnergyRunway = 7200;
+	state.monkey.run();
+	assert.deepEqual(state.purchases, [
+		"unlockLabT4",
+		"energyEfficiencyResearch",
+		"lab",
+	]);
+	assert.equal(state.stock.energy, 400000);
+	assert.match(state.messages.at(-1), /Recovering energy: -98\/s/);
+	assert.match(state.messages.at(-1), /Built lab/);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("recovery research preserves progression priority without spending energy on resource unlocks", () => {
+	let resourceUnlocks = 0;
+	const state = harness({
+		rates: { energy: -98 },
+		stock: { energy: 400000, science: 60000, plasma: 100 },
+		technologies: {
+			unlockEmc: research(60000, { unlocked: false }),
+			unlockMeteorite: research(60000),
+			unlockLabT4: research(60000),
+		},
+		actions: {
+			unlockEmcResearch: () => {
+				resourceUnlocks++;
+			},
+		},
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["unlockMeteorite"]);
+	assert.equal(resourceUnlocks, 0);
+	assert.equal(state.stock.energy, 400000);
+});
+
+test("all unlocked affordable science tiers can build during blocked, power-starved recovery", () => {
+	const state = harness({
+		rates: { energy: -98 },
+		stock: { energy: 0 },
+		globals: { energyLow: true, globalEnergyLock: true },
+		machines: [
+			{ name: "labT5", locked: true },
+			{ name: "labT4", affordable: false },
+			{ name: "labT3" },
+			{ name: "labT2" },
+			{ name: "lab" },
+			{ name: "laserCutter", inputs: { energy: 10 } },
+		],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["labT3", "labT2", "lab"]);
+	assert.equal(state.monkey.budget.energy, -98);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("deficits allow science buildings while pausing other normal purchases", () => {
 	const state = harness({
 		rates: { wood: -5 },
 		stock: { wood: 100000 },
 		machines: [{ name: "woodcutter" }, { name: "lab" }],
 	});
 	state.monkey.run();
-	assert.deepEqual(state.purchases, ["woodcutter"]);
+	assert.deepEqual(state.purchases, ["woodcutter", "lab"]);
 	assert.match(state.messages.at(-1), /Recovering wood: -5\/s/);
 	assert.deepEqual(state.gathering, ["oil", "metal", "wood", "gem"]);
 });
@@ -899,6 +1094,106 @@ test("finite storage uses >= and the correct gem ID; science stays unlimited", (
 	state.monkey.buildProducers("science");
 	assert.deepEqual(state.purchases, ["lab"]);
 });
+
+function plasmaHarness(extra = {}) {
+	return harness({
+		rates: { energy: 20000, hydrogen: 200, helium: 200 },
+		machines: [
+			{ name: "heater", inputs: { energy: 1000, hydrogen: 10 } },
+			{ name: "plasmatic", inputs: { energy: 8500, helium: 80 } },
+			{ name: "bath", inputs: { energy: 15000, hydrogen: 100, helium: 100 } },
+		],
+		...extra,
+	});
+}
+
+test("plasma selection compares actual output per energy rather than tier ordering", () => {
+	const state = plasmaHarness();
+	assert.equal(state.monkey.selectPlasmaProducer().producer, "bath");
+	state.context.heaterOutput = 100;
+	assert.equal(state.monkey.selectPlasmaProducer().producer, "heater");
+	state.monkey.ensurePlasmaProduction();
+	assert.deepEqual(state.purchases, ["heater"]);
+	assert.equal(state.monkey.budget.plasma, 0);
+});
+
+test("initial plasma production can start with an efficient higher tier", () => {
+	const state = plasmaHarness();
+	state.monkey.ensurePlasmaProduction();
+	assert.deepEqual(state.purchases, ["bath"]);
+	state.monkey.buildPlasmaSupply("grow plasma");
+	assert.deepEqual(state.purchases, ["bath"]);
+});
+
+test("plasma selection applies heater material discounts and the energy runway limit", () => {
+	const state = plasmaHarness({
+		rates: { energy: 1000, hydrogen: 200, helium: 200 },
+		stock: { energy: 400000, lunarite: 50 },
+		globals: { T1Price: 0.5, heaterLunariteCost: 100 },
+	});
+	assert.equal(state.monkey.plasmaCost("heater").lunarite, 50);
+	assert.equal(state.monkey.selectPlasmaProducer().producer, "heater");
+	state.monkey.buildPlasmaSupply("grow plasma");
+	assert.deepEqual(state.purchases, ["heater"]);
+	assert.equal(state.monkey.budget.energy, 0);
+});
+
+test("plasma saves for efficient T2 instead of repeatedly buying affordable heaters", () => {
+	const state = plasmaHarness({
+		rates: { energy: 20000, hydrogen: 200, helium: 200, lunarite: 10 },
+		globals: { plasmaticLunariteCost: 100 },
+	});
+	state.available.set("getBath", false);
+	state.monkey.buildPlasmaSupply("supply meteorite");
+	assert.deepEqual(state.purchases, []);
+	assert.match(state.monkey.plasmaPlan, /Saving for plasmatic.*\n.*0h 00m 10s/);
+	const plan = { textContent: "" };
+	state.context.document.getElementById = (id) =>
+		id === "automonkeyPlan" ? plan : null;
+	state.monkey.updatePlan();
+	assert.match(plan.textContent, /Saving for plasmatic/);
+	state.stock.lunarite = 100;
+	state.monkey.beginTick();
+	state.monkey.buildPlasmaSupply("supply meteorite");
+	assert.deepEqual(state.purchases, ["plasmatic"]);
+});
+
+test("plasma recovery also saves for the efficient target", () => {
+	const state = plasmaHarness({
+		rates: {
+			plasma: -1,
+			energy: 20000,
+			hydrogen: 200,
+			helium: 200,
+			lunarite: 10,
+		},
+		globals: { plasmaticLunariteCost: 100 },
+	});
+	state.available.set("getBath", false);
+	state.monkey.recoverProduction();
+	assert.deepEqual(state.purchases, []);
+	assert.match(
+		state.messages.at(-1),
+		/plasmatic needs construction resources.*Estimated ready/,
+	);
+});
+
+for (const blocker of ["locked", "disabled", "fuel", "storage", "stalled"]) {
+	test(`plasma falls back when higher tiers are ${blocker}`, () => {
+		const state = plasmaHarness();
+		state.available.set("getBath", false);
+		if (blocker === "locked") state.available.set("getPlasmatic", false);
+		if (blocker === "disabled") state.context.plasmaticToggled = false;
+		if (blocker === "fuel") state.monkey.budget.helium = 0;
+		if (blocker === "storage") {
+			state.context.plasmaticLunariteCost = 100001;
+			state.rates.lunarite = 10;
+		}
+		if (blocker === "stalled") state.context.plasmaticLunariteCost = 100;
+		state.monkey.buildPlasmaSupply("grow plasma");
+		assert.deepEqual(state.purchases, ["heater"]);
+	});
+}
 
 test("bootstraps one Super-Heater without repeated zero-output purchases", () => {
 	const state = harness({

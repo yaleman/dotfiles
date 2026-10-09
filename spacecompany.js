@@ -26,6 +26,108 @@ var automonkey = {
 	minimumEnergyRunway: 4 * 60 * 60,
 	energyRunwayStorageKey: "automonkey.minimumEnergyRunwayHours",
 	maxSwarms: 6,
+	wonders: [
+		[
+			"Precious wonder",
+			"achievePreciousWonder",
+			"preciousWonderButton",
+			"precious",
+			["gem", "silver", "gold"],
+		],
+		[
+			"Precious wonder activation",
+			"activatePreciousWonder",
+			"activatePreciousWonder",
+			"preciousActivate",
+			["gem", "silver", "gold"],
+			"preciousWonderNav",
+		],
+		[
+			"Energetic wonder",
+			"achieveEnergeticWonder",
+			"energeticWonderButton",
+			"energetic",
+			["wood", "charcoal", "uranium"],
+		],
+		[
+			"Energetic wonder activation",
+			"activateEnergeticWonder",
+			"activateEnergeticWonder",
+			"energeticActivate",
+			["wood", "charcoal", "uranium"],
+			"energeticWonderNav",
+		],
+		[
+			"Technological wonder",
+			"achieveTechWonder",
+			"techWonderButton",
+			"tech",
+			["silicon", "gold", "gem"],
+		],
+		[
+			"Technological wonder activation",
+			"activateTechWonder",
+			"activateTechWonder",
+			"techActivate",
+			["silicon", "gold", "gem"],
+			"techWonderNav",
+		],
+		[
+			"Meteorite wonder",
+			"achieveMeteoriteWonder",
+			"meteoriteWonderButton",
+			"meteorite",
+			["meteorite", "ice", "silicon"],
+		],
+		[
+			"Meteorite wonder activation",
+			"activateMeteoriteWonder",
+			"activateMeteoriteWonder",
+			"meteoriteActivate",
+			["meteorite", "ice", "silicon"],
+			"meteoriteWonderNav",
+		],
+		[
+			"Communication wonder",
+			"rebuildCommsWonder",
+			"rebuildCommsWonder",
+			"commsWonder",
+			["gold", "silicon", "ice"],
+			"communicationWonderNav",
+		],
+		[
+			"Rocket wonder",
+			"rebuildRocketWonder",
+			"rebuildRocketWonder",
+			"rocketWonder",
+			["lunarite", "titanium", "metal"],
+			"rocketWonderNav",
+		],
+		[
+			"Antimatter wonder",
+			"rebuildAntimatterWonder",
+			"rebuildAntimatterWonder",
+			"antimatterWonder",
+			["uranium", "lava", "oil", "methane"],
+			"antimatterWonderNav",
+		],
+		[
+			"Portal",
+			"activatePortal",
+			"activatePortal",
+			"portal",
+			["meteorite", "helium", "silicon"],
+			"portalRoomNav",
+		],
+		[
+			"Stargate",
+			"rebuildStargate",
+			"rebuildStargate",
+			"stargateWonder",
+			["plasma", "silicon", "meteorite"],
+			"stargateNav",
+		],
+	],
 
 	producers: {
 		energy: [
@@ -99,6 +201,7 @@ var automonkey = {
 		);
 		this.builtThisTick = new Set();
 		this.lastAction = null;
+		this.plasmaPlan = null;
 	},
 
 	maxedOut(resource) {
@@ -127,9 +230,18 @@ var automonkey = {
 		try {
 			this.beginTick();
 			this.manualResource();
+			this.buyWonders();
 			if (this.recoverProduction()) {
+				this.unlockProgressionResearch(false);
+				this.buyEarlyScience();
+				this.buildProducers("science", true);
+				this.setMessage(
+					[
+						...new Set([this.recoveryMessage, this.lastAction].filter(Boolean)),
+					].join("\n"),
+				);
 				this.updatePlan(
-					"Research paused while recovering resource production. ",
+					"Recovering resource production. Science-funded research and science buildings continue; other building purchases are paused.",
 				);
 				return;
 			}
@@ -154,7 +266,8 @@ var automonkey = {
 				Game.resources.getResource("energy") <= 0
 			)
 				this.buildProducers("energy", false, true);
-			this.rebuildStargate();
+			this.prepareStargate();
+			this.buyWonders();
 			this.upgradeStorage();
 			this.buyEarlyScience();
 			this.buildProducers("science");
@@ -337,15 +450,27 @@ var automonkey = {
 			.join(", ");
 		const blocked = [];
 		for (const resource of deficits) {
-			for (const producer of this.producers[resource] ?? []) {
-				const result = this.tryBuildProducer(resource, producer);
+			const plasma = resource === "plasma" ? this.selectPlasmaProducer() : null;
+			const producers =
+				resource === "plasma"
+					? plasma
+						? [plasma.producer]
+						: []
+					: (this.producers[resource] ?? []);
+			for (const producer of producers) {
+				const result =
+					plasma && plasma.kind !== this.status.SUCCESS
+						? plasma
+						: this.tryBuildProducer(resource, producer);
 				if (
 					this.recordResult(
 						result,
 						`Recovering ${summary} — built ${producer}; checking again next tick.`,
 					)
-				)
+				) {
+					this.recoveryMessage = this.lastAction;
 					return true;
+				}
 				blocked.push(result);
 			}
 		}
@@ -358,7 +483,7 @@ var automonkey = {
 		if (reason) {
 			switch (reason.kind) {
 				case this.status.UNAFFORDABLE:
-					detail = `${reason.producer} needs construction resources`;
+					detail = `${reason.producer} needs construction resources${reason.cost ? `. ${this.affordabilityCountdown(reason.cost)}` : ""}`;
 					break;
 				case this.status.INPUTS:
 					detail =
@@ -374,18 +499,81 @@ var automonkey = {
 					break;
 			}
 		}
-		this.setMessage(`Recovering ${summary} — waiting: ${detail}.`);
+		this.recoveryMessage = `Recovering ${summary} — waiting: ${detail}.`;
+		this.setMessage(this.recoveryMessage);
 		return true;
 	},
 
 	ensurePlasmaProduction() {
-		if (this.budget.plasma === 0 && window.heater < 1) {
-			return this.recordResult(
-				this.tryBuildProducer("plasma", "heater"),
-				"Built a Super-Heater to start plasma production.",
-			);
-		}
+		if (
+			this.budget.plasma === 0 &&
+			this.producers.plasma.every((producer) => !(window[producer] > 0))
+		)
+			return this.buildPlasmaSupply("start plasma production");
 		return false;
+	},
+
+	plasmaCost(producer) {
+		const materials = {
+			heater: ["lunarite", "gem", "silicon"],
+			plasmatic: ["lunarite", "silicon", "meteorite"],
+			bath: ["lava", "gold", "meteorite"],
+		};
+		return Object.fromEntries(
+			materials[producer].map((resource) => [
+				resource,
+				window[
+					`${producer}${resource[0].toUpperCase()}${resource.slice(1)}Cost`
+				] * (producer === "heater" ? window.T1Price : 1),
+			]),
+		);
+	},
+
+	selectPlasmaProducer() {
+		if (
+			this.producers.plasma.some((producer) => this.builtThisTick.has(producer))
+		)
+			return null;
+		const efficiency = (producer) => {
+			const output = window[`${producer}Output`];
+			const energy = this.producerInputs(producer).energy;
+			return output > 0 ? (energy > 0 ? output / energy : Infinity) : 0;
+		};
+		for (const producer of [...this.producers.plasma].sort(
+			(a, b) => efficiency(b) - efficiency(a),
+		)) {
+			if (efficiency(producer) === 0) continue;
+			const checked = this.checkProducer("plasma", producer);
+			if (checked.kind !== this.status.SUCCESS) continue;
+			const cost = this.plasmaCost(producer);
+			if (this.hasResources(cost)) return { ...checked, cost };
+			const canSave = Object.entries(cost).every(([resource, amount]) => {
+				if (!Number.isFinite(amount)) return false;
+				if (Game.resources.getResource(resource) >= amount) return true;
+				const capacity = Game.resources.getStorage(resource);
+				return (
+					(capacity < 0 || capacity >= amount) &&
+					Game.resources.getProduction(resource) > 0
+				);
+			});
+			if (canSave) return { kind: this.status.UNAFFORDABLE, producer, cost };
+		}
+		return null;
+	},
+
+	buildPlasmaSupply(purpose) {
+		const selected = this.selectPlasmaProducer();
+		if (!selected) return false;
+		if (selected.kind === this.status.UNAFFORDABLE) {
+			this.lastAction = `Saving for ${selected.producer} to ${purpose}.\n${this.affordabilityCountdown(selected.cost)}`;
+			this.plasmaPlan = this.lastAction;
+			this.setMessage(this.lastAction);
+			return false;
+		}
+		return this.recordResult(
+			this.tryBuildProducer("plasma", selected.producer),
+			`Built ${selected.producer} to ${purpose}.`,
+		);
 	},
 
 	hasMeteoritePrerequisites() {
@@ -427,15 +615,7 @@ var automonkey = {
 				continue;
 			const result = this.tryBuildProducer("meteorite", producer);
 			if (result.kind === this.status.INPUTS && result.input === "plasma") {
-				for (const plasmaProducer of this.producers.plasma) {
-					if (
-						this.recordResult(
-							this.tryBuildProducer("plasma", plasmaProducer),
-							`Built ${plasmaProducer} to supply ${producer} and keep 1 plasma/s spare.`,
-						)
-					)
-						return;
-				}
+				this.buildPlasmaSupply(`supply ${producer} and keep 1 plasma/s spare`);
 			} else if (
 				this.recordResult(
 					result,
@@ -504,7 +684,7 @@ var automonkey = {
 		}
 	},
 
-	unlockProgressionResearch() {
+	unlockProgressionResearch(resourceUnlocks = true) {
 		this.buyMeteoriteResearch();
 		for (const [id, func, cost] of [
 			[
@@ -517,6 +697,7 @@ var automonkey = {
 		]) {
 			const tech = Game.tech.getTechData(id);
 			if (
+				resourceUnlocks &&
 				tech &&
 				!tech.unlocked &&
 				tech.current === 0 &&
@@ -662,7 +843,35 @@ var automonkey = {
 		} else if (this.isResourceAvailable(resource)) convertEnergy(resource);
 	},
 
-	rebuildStargate() {
+	buyWonders() {
+		for (const [name, func, completed, prefix, resources, navigation] of this
+			.wonders) {
+			if (
+				navigation &&
+				!this.isElementAvailable(document.getElementById(navigation))
+			)
+				continue;
+			if (
+				window.buttonsHidden?.includes(completed) ||
+				!this.isActionAvailable(func)
+			)
+				continue;
+			const cost = Object.fromEntries(
+				resources.map((resource) => [
+					resource,
+					window[
+						`${prefix}${resource[0].toUpperCase()}${resource.slice(1)}Cost`
+					],
+				]),
+			);
+			if (!this.hasResources(cost)) continue;
+			window[func]();
+			if (window.buttonsHidden?.includes(completed))
+				this.recordResult({ kind: this.status.SUCCESS }, `Completed ${name}`);
+		}
+	},
+
+	prepareStargate() {
 		if (
 			window.sphere !== 1 ||
 			window.energyLow ||
@@ -685,14 +894,6 @@ var automonkey = {
 			Game.resources.getResource("silicon") < window.stargateWonderSiliconCost
 		)
 			this.convertResource("silicon");
-		if (
-			this.hasResources({
-				meteorite: window.stargateWonderMeteoriteCost,
-				plasma: window.stargateWonderPlasmaCost,
-				silicon: window.stargateWonderSiliconCost,
-			})
-		)
-			rebuildStargate();
 	},
 
 	manualResource() {
@@ -905,8 +1106,11 @@ var automonkey = {
 				prefix.trim() ||
 					"Building affordable resource, power and science producers as inputs allow.",
 				this.sciencePlan(),
+				this.plasmaPlan,
 				powerPlan,
-			].join("\n");
+			]
+				.filter(Boolean)
+				.join("\n");
 		}
 	},
 };
