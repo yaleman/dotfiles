@@ -200,6 +200,55 @@ function research(science, extra = {}) {
 	};
 }
 
+test("tab insertion uses direct children and remains safe when pasted again", () => {
+	for (const directChild of [true, false]) {
+		const state = harness();
+		const nodes = new Map();
+		const createNode = () => ({
+			style: {},
+			setAttribute() {},
+			appendChild() {},
+		});
+		const nested = { parentElement: {} },
+			direct = { parentElement: null };
+		const tabList = {
+			querySelector: (selector) =>
+				selector === ":scope > .pull-right"
+					? directChild
+						? direct
+						: null
+					: nested,
+			insertBefore: (tab, reference) => {
+				if (reference && reference.parentElement !== tabList)
+					throw new DOMException("Not a direct child", "NotFoundError");
+				assert.equal(reference, directChild ? direct : null);
+				nodes.set(tab.id, tab);
+			},
+		};
+		direct.parentElement = tabList;
+		const elements = new Map([
+			["#automonkeyEnergyRunway", createNode()],
+			["#automonkeyPlan", createNode()],
+			["#automonkeyMessage", createNode()],
+		]);
+		const panel = {
+			style: {},
+			querySelector: (selector) => elements.get(selector),
+			querySelectorAll: () => [],
+		};
+		nodes.set("tabList", tabList);
+		nodes.set("tabContent", createNode());
+		nodes.set("automonkeyPanel", panel);
+		state.context.document.getElementById = (id) => nodes.get(id) ?? null;
+		state.context.document.createElement = createNode;
+		state.monkey.injectCustomTab();
+		const first = nodes.get("automonkeyTab");
+		assert.ok(first);
+		state.monkey.injectCustomTab();
+		assert.equal(nodes.get("automonkeyTab"), first);
+	}
+});
+
 test("energy runway setting restores, saves and survives pasting the script again", () => {
 	let saved = "8";
 	const state = harness({

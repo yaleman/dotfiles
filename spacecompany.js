@@ -996,7 +996,7 @@ var automonkey = {
 			link.setAttribute("aria-controls", "automonkeyPanel");
 			link.setAttribute("data-toggle", "tab");
 			tab.appendChild(link);
-			tabList.insertBefore(tab, tabList.querySelector(".pull-right"));
+			tabList.insertBefore(tab, tabList.querySelector(":scope > .pull-right"));
 		}
 	},
 
