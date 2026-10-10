@@ -199,9 +199,30 @@ var automonkey = {
 			0,
 			1 - Game.tech.getTechData("energyEfficiencyResearch").current * 0.01,
 		);
+		if (typeof window.calculateEnergyOutput === "function") {
+			let consumption = 0;
+			if (!window.globalEnergyLock) {
+				for (const [resource, producers] of Object.entries(this.producers)) {
+					if (resource === "charcoal" && !window.charcoalToggled) continue;
+					for (const producer of producers) {
+						if (resource === "plasma" && !window[`${producer}Toggled`])
+							continue;
+						consumption +=
+							(window[producer] ?? 0) *
+							(this.producerInputs(producer).energy ?? 0);
+					}
+				}
+			}
+			// The game's sampled rate can omit plasma consumption while its stock is low.
+			this.budget.energy = Math.min(
+				this.budget.energy,
+				window.calculateEnergyOutput(1) - consumption,
+			);
+		}
 		this.builtThisTick = new Set();
 		this.lastAction = null;
 		this.plasmaPlan = null;
+		this.buildingPlans = new Map();
 	},
 
 	maxedOut(resource) {
@@ -228,6 +249,19 @@ var automonkey = {
 
 	run() {
 		try {
+			if (
+				Number.isFinite(Game.lastFixedUpdate) &&
+				Date.now() - Game.lastFixedUpdate > 2000
+			) {
+				this.setMessage(
+					"Waiting for the game to refresh production; purchases are paused.",
+				);
+				const plan = document.getElementById("automonkeyPlan");
+				if (plan)
+					plan.textContent =
+						"Production data is stale. Automation will resume after the game updates.";
+				return;
+			}
 			this.beginTick();
 			this.manualResource();
 			this.buyWonders();
@@ -420,9 +454,39 @@ var automonkey = {
 		}
 	},
 
+	producerCost(resource, producer) {
+		const tierOne =
+			this.producers[resource].at(-1) === producer && resource !== "science";
+		const discount = tierOne ? window.T1Price : 1;
+		return Object.fromEntries(
+			[...new Set(Object.values(RESOURCE))].flatMap((input) => {
+				const amount =
+					window[`${producer}${input[0].toUpperCase()}${input.slice(1)}Cost`];
+				return amount === undefined ? [] : [[input, amount * discount]];
+			}),
+		);
+	},
+
+	weightedProducerCost(resource, producer) {
+		const cost = this.producerCost(resource, producer);
+		if (Object.keys(cost).length === 0) return null;
+		return Object.entries(cost).reduce(
+			(total, [input, amount]) =>
+				total + amount * (input === "meteorite" ? 10 : 1),
+			0,
+		);
+	},
+
 	buildProducers(resource, freeOnly = false, productionNeeded = false) {
 		if (!productionNeeded && this.maxedOut(resource)) return;
-		for (const producer of this.producers[resource]) {
+		const producers = this.producers[resource];
+		for (const [index, producer] of producers.entries()) {
+			if (
+				!this.isActionAvailable(
+					`get${producer[0].toUpperCase()}${producer.slice(1)}`,
+				)
+			)
+				continue;
 			if (
 				freeOnly &&
 				Object.values(this.producerInputs(producer)).some(
@@ -430,6 +494,31 @@ var automonkey = {
 				)
 			)
 				continue;
+			const higher =
+				resource !== "science" &&
+				producers
+					.slice(0, index)
+					.reverse()
+					.find((candidate) =>
+						this.isActionAvailable(
+							`get${candidate[0].toUpperCase()}${candidate.slice(1)}`,
+						),
+					);
+			if (higher) {
+				const price = this.weightedProducerCost(resource, producer);
+				const higherPrice = this.weightedProducerCost(resource, higher);
+				if (
+					price !== null &&
+					higherPrice !== null &&
+					price > higherPrice * 0.5
+				) {
+					this.buildingPlans.set(
+						resource,
+						`Saving for ${higher}: ${producer} costs ${price.toFixed(0)} weighted items, above half of ${higherPrice.toFixed(0)}.\n${this.affordabilityCountdown(this.producerCost(resource, higher))}`,
+					);
+					continue;
+				}
+			}
 			this.recordResult(
 				this.tryBuildProducer(resource, producer),
 				`Built ${producer}`,
@@ -996,7 +1085,7 @@ var automonkey = {
 			link.setAttribute("aria-controls", "automonkeyPanel");
 			link.setAttribute("data-toggle", "tab");
 			tab.appendChild(link);
-			tabList.insertBefore(tab, tabList.querySelector(":scope > .pull-right"));
+			tabList.appendChild(tab);
 		}
 	},
 
@@ -1107,6 +1196,7 @@ var automonkey = {
 					"Building affordable resource, power and science producers as inputs allow.",
 				this.sciencePlan(),
 				this.plasmaPlan,
+				...(this.buildingPlans?.values() ?? []),
 				powerPlan,
 			]
 				.filter(Boolean)

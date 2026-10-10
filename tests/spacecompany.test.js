@@ -152,6 +152,10 @@ function harness({
 	};
 	for (const machine of machines) {
 		context[machine.name] = machine.count ?? 0;
+		for (const [resource, amount] of Object.entries(machine.costs ?? {}))
+			context[
+				`${machine.name}${resource[0].toUpperCase()}${resource.slice(1)}Cost`
+			] = amount;
 		for (const [resource, amount] of Object.entries(machine.inputs ?? {}))
 			context[
 				`${machine.name}${resource[0].toUpperCase()}${resource.slice(1)}Input`
@@ -200,7 +204,7 @@ function research(science, extra = {}) {
 	};
 }
 
-test("tab insertion uses direct children and remains safe when pasted again", () => {
+test("tab appends without reference-node insertion and remains safe when pasted again", () => {
 	for (const directChild of [true, false]) {
 		const state = harness();
 		const nodes = new Map();
@@ -209,23 +213,19 @@ test("tab insertion uses direct children and remains safe when pasted again", ()
 			setAttribute() {},
 			appendChild() {},
 		});
-		const nested = { parentElement: {} },
-			direct = { parentElement: null };
 		const tabList = {
-			querySelector: (selector) =>
-				selector === ":scope > .pull-right"
-					? directChild
-						? direct
-						: null
-					: nested,
-			insertBefore: (tab, reference) => {
-				if (reference && reference.parentElement !== tabList)
-					throw new DOMException("Not a direct child", "NotFoundError");
-				assert.equal(reference, directChild ? direct : null);
+			querySelector: () =>
+				directChild ? { parentElement: tabList } : { parentElement: {} },
+			insertBefore: () => {
+				throw new DOMException(
+					"Reference-node insertion is unsafe",
+					"NotFoundError",
+				);
+			},
+			appendChild: (tab) => {
 				nodes.set(tab.id, tab);
 			},
 		};
-		direct.parentElement = tabList;
 		const elements = new Map([
 			["#automonkeyEnergyRunway", createNode()],
 			["#automonkeyPlan", createNode()],
@@ -326,6 +326,56 @@ test("unavailable localStorage does not stop automation or discard the active se
 	assert.equal(state.monkey.minimumEnergyRunway, 3600);
 	assert.match(state.messages.at(-1), /could not save/);
 	assert.deepEqual(state.canceled, []);
+});
+
+test("energy budgeting includes enabled plasma consumption hidden by low stock", () => {
+	const state = harness({
+		rates: { energy: 1000 },
+		stock: { energy: 621197 },
+		technologies: { energyEfficiencyResearch: purchasedTech({ current: 25 }) },
+		machines: [{ name: "bath", count: 3, inputs: { energy: 15000 } }],
+		globals: { calculateEnergyOutput: () => 1000 },
+	});
+	assert.equal(state.monkey.budget.energy, -32750);
+	assert.ok(state.monkey.energySecondsAfterConsumption(0) < 20);
+	assert.equal(
+		state.monkey.checkProducer("plasma", "bath").kind,
+		state.monkey.status.INPUTS,
+	);
+	state.context.bathToggled = false;
+	state.monkey.beginTick();
+	assert.equal(state.monkey.budget.energy, 1000);
+});
+
+test("steady energy budgeting accounts for all owned machines and retains worse sampled rates", () => {
+	const state = harness({
+		rates: { energy: 900 },
+		machines: [{ name: "laserCutter", count: 2, inputs: { energy: 100 } }],
+		globals: { calculateEnergyOutput: () => 1000 },
+	});
+	assert.equal(state.monkey.budget.energy, 800);
+	state.rates.energy = -2000;
+	state.monkey.beginTick();
+	assert.equal(state.monkey.budget.energy, -2000);
+});
+
+test("stale game updates prevent repeated purchases against an old production snapshot", () => {
+	const state = harness({
+		rates: { energy: 1000 },
+		machines: [{ name: "lab" }],
+	});
+	state.context.Game.lastFixedUpdate = Date.now() - 5000;
+	state.monkey.run();
+	assert.deepEqual(state.purchases, []);
+	assert.deepEqual(state.gathering, []);
+	assert.match(
+		state.messages.at(-1),
+		/Waiting for the game to refresh production/,
+	);
+	assert.deepEqual(state.canceled, []);
+	state.context.Game.lastFixedUpdate = Date.now();
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["lab"]);
 });
 
 test("energy helpers report current depletion and a hypothetical absolute deficit", () => {
@@ -1068,6 +1118,93 @@ test("power locks and starvation block powered machines but allow free producers
 			state.monkey.status.SUCCESS,
 		);
 	}
+});
+
+for (const [price, expected] of [
+	[49, true],
+	[50, true],
+	[51, false],
+]) {
+	test(`lower resource tier priced at ${price} obeys the inclusive half-price boundary`, () => {
+		const state = harness({
+			machines: [
+				{ name: "vent", costs: { lunarite: 100 }, affordable: false },
+				{ name: "spaceCow", costs: { lunarite: price } },
+			],
+		});
+		state.monkey.buildProducers("methane");
+		assert.deepEqual(state.purchases, expected ? ["spaceCow"] : []);
+	});
+}
+
+test("weighted costs count meteorite tenfold and match the methane screenshot", () => {
+	const state = harness({
+		machines: [
+			{
+				name: "vent",
+				costs: { lunarite: 111466, helium: 100748, meteorite: 835 },
+				affordable: false,
+			},
+			{
+				name: "spaceCow",
+				costs: { lunarite: 46066, titanium: 51824, silicon: 74857 },
+			},
+		],
+	});
+	assert.equal(state.monkey.weightedProducerCost("methane", "vent"), 220564);
+	assert.equal(
+		state.monkey.weightedProducerCost("methane", "spaceCow"),
+		172747,
+	);
+	state.monkey.buildProducers("methane");
+	assert.deepEqual(state.purchases, []);
+	assert.match(state.monkey.buildingPlans.get("methane"), /Saving for vent/);
+});
+
+test("tier comparisons use the next unlocked tier and refreshed prices", () => {
+	const state = harness({
+		machines: [
+			{ name: "vent", costs: { lunarite: 100 }, locked: true },
+			{ name: "spaceCow", costs: { lunarite: 51 } },
+		],
+	});
+	state.monkey.buildProducers("methane");
+	assert.deepEqual(state.purchases, ["spaceCow"]);
+	state.monkey.beginTick();
+	state.available.set("getVent", true);
+	state.monkey.buildProducers("methane");
+	assert.equal(state.purchases.filter((x) => x === "spaceCow").length, 1);
+	state.monkey.beginTick();
+	state.context.ventLunariteCost = 102;
+	state.monkey.buildProducers("methane");
+	assert.equal(state.purchases.filter((x) => x === "spaceCow").length, 2);
+});
+
+test("weighted first-tier price includes the game purchase discount", () => {
+	const state = harness({
+		globals: { T1Price: 0.5 },
+		machines: [
+			{ name: "suctionExcavator", costs: { gem: 100 }, affordable: false },
+			{ name: "vacuum", costs: { gem: 100 } },
+		],
+	});
+	assert.equal(state.monkey.weightedProducerCost("methane", "vacuum"), 50);
+	state.monkey.buildProducers("methane");
+	assert.deepEqual(state.purchases, ["vacuum"]);
+});
+
+test("price balancing does not block urgent recovery or science building purchases", () => {
+	const state = harness({
+		rates: { methane: -1 },
+		machines: [
+			{ name: "vent", costs: { lunarite: 100 }, affordable: false },
+			{ name: "spaceCow", costs: { lunarite: 90 } },
+			{ name: "labT2", costs: { wood: 100 }, affordable: false },
+			{ name: "lab", costs: { wood: 90 } },
+		],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["spaceCow", "lab"]);
 });
 
 test("normal tick builds advanced wood, silicon and labs through the shared budget", () => {
