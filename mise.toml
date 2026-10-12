@@ -16,12 +16,7 @@ run = "go clean -modcache"
 
 [tasks.cleanup-docker]
 description = "Clean docker cache"
-run = [
-    "docker system prune --all --force --volumes || true",
-    "docker system prune --all --force || true",
-    "docker buildx prune --all --force || true",
-    "docker buildx history rm --all || true",
-]
+run = ["cleanup-docker.sh"]
 
 [tasks.cleanup-uv]
 description = "Clean uv cache"
