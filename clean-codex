@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 
 # the Codex crashpad folder can get pretty big
-TOTAL_MB=$(du -d1 -m -c "$HOME/Library/Application Support/Codex/Crashpad/" | tail -1 | awk '{print $1}')
+CRASHPAD_DIR="$HOME/Library/Application Support/Codex/Crashpad"
+if [ ! -d "${CRASHPAD_DIR:?}" ]; then
+    echo "Codex Crashpad folder does not exist."
+    exit 0
+fi
+TOTAL_MB=$(du -d1 -m -c "${CRASHPAD_DIR:?}" | tail -1 | awk '{print $1}')
 OVERSIZE=1024
 if [ "$TOTAL_MB" -gt "$OVERSIZE" ]; then
     echo "Codex Crashpad folder is larger than ${OVERSIZE}MB. Cleaning up..."
-    rm -rf "$HOME/Library/Application Support/Codex/Crashpad"/*
+    rm -rf "${CRASHPAD_DIR:?}"/*
 else
     echo "Codex Crashpad folder size is under limits (${OVERSIZE}MB) ${TOTAL_MB}MB."
 fi
