@@ -223,6 +223,7 @@ var automonkey = {
 		this.lastAction = null;
 		this.plasmaPlan = null;
 		this.buildingPlans = new Map();
+		this.rocketPlan = null;
 	},
 
 	maxedOut(resource) {
@@ -265,6 +266,7 @@ var automonkey = {
 			this.beginTick();
 			this.manualResource();
 			this.buyWonders();
+			this.buyRocket();
 			if (this.recoverProduction()) {
 				this.unlockProgressionResearch(false);
 				this.buyEarlyScience();
@@ -477,10 +479,33 @@ var automonkey = {
 		);
 	},
 
+	shouldSaveForHigherTier(resource, producer) {
+		if (resource === "science") return false;
+		const producers = this.producers[resource];
+		const higher = producers
+			.slice(0, producers.indexOf(producer))
+			.reverse()
+			.find((candidate) =>
+				this.isActionAvailable(
+					`get${candidate[0].toUpperCase()}${candidate.slice(1)}`,
+				),
+			);
+		if (!higher) return false;
+		const price = this.weightedProducerCost(resource, producer);
+		const higherPrice = this.weightedProducerCost(resource, higher);
+		if (price === null || higherPrice === null || price <= higherPrice * 0.5)
+			return false;
+		this.buildingPlans.set(
+			resource,
+			`Saving for ${higher}: ${producer} costs ${price.toFixed(0)} weighted items, above half of ${higherPrice.toFixed(0)}.\n${this.affordabilityCountdown(this.producerCost(resource, higher))}`,
+		);
+		return true;
+	},
+
 	buildProducers(resource, freeOnly = false, productionNeeded = false) {
 		if (!productionNeeded && this.maxedOut(resource)) return;
 		const producers = this.producers[resource];
-		for (const [index, producer] of producers.entries()) {
+		for (const producer of producers) {
 			if (
 				!this.isActionAvailable(
 					`get${producer[0].toUpperCase()}${producer.slice(1)}`,
@@ -494,31 +519,7 @@ var automonkey = {
 				)
 			)
 				continue;
-			const higher =
-				resource !== "science" &&
-				producers
-					.slice(0, index)
-					.reverse()
-					.find((candidate) =>
-						this.isActionAvailable(
-							`get${candidate[0].toUpperCase()}${candidate.slice(1)}`,
-						),
-					);
-			if (higher) {
-				const price = this.weightedProducerCost(resource, producer);
-				const higherPrice = this.weightedProducerCost(resource, higher);
-				if (
-					price !== null &&
-					higherPrice !== null &&
-					price > higherPrice * 0.5
-				) {
-					this.buildingPlans.set(
-						resource,
-						`Saving for ${higher}: ${producer} costs ${price.toFixed(0)} weighted items, above half of ${higherPrice.toFixed(0)}.\n${this.affordabilityCountdown(this.producerCost(resource, higher))}`,
-					);
-					continue;
-				}
-			}
+			if (this.shouldSaveForHigherTier(resource, producer)) continue;
 			this.recordResult(
 				this.tryBuildProducer(resource, producer),
 				`Built ${producer}`,
@@ -699,6 +700,7 @@ var automonkey = {
 			const func = `get${producer[0].toUpperCase()}${producer.slice(1)}`;
 			if (
 				!this.isActionAvailable(func) ||
+				this.shouldSaveForHigherTier("meteorite", producer) ||
 				!this.hasResources(this.meteoriteCost(producer))
 			)
 				continue;
@@ -930,6 +932,64 @@ var automonkey = {
 			if (Game.tech.getTechData("unlockMeteorite")?.current)
 				convertPlasma(resource);
 		} else if (this.isResourceAvailable(resource)) convertEnergy(resource);
+	},
+
+	buyRocket() {
+		const rockets = Game.interstellar.rocket;
+		const parts = Game.interstellar.rocketParts;
+		const rocket = rockets?.getRocketData("tier1Rocket");
+		if (
+			!rocket?.unlocked ||
+			rocket.built ||
+			!parts ||
+			!Game.interstellar.getInterstellarData("rocket")?.unlocked ||
+			!this.isElementAvailable(document.getElementById(`${rocket.htmlId}_buy`))
+		)
+			return;
+		const missing = [];
+		for (const [id, required] of Object.entries(rocket.cost)) {
+			const part = parts.getPartData(id);
+			if (!part?.unlocked) {
+				missing.push(`${part?.name ?? id}: waiting for unlock.`);
+				continue;
+			}
+			const target = Math.min(required, part.max);
+			if (
+				part.count < target &&
+				this.isElementAvailable(document.getElementById(`${part.htmlId}_buy`))
+			) {
+				parts.updateCost(id);
+				while (part.count < target && this.hasResources(part.cost)) {
+					const before = part.count;
+					parts.buildPart(id, 1);
+					if (part.count <= before) break;
+					this.recordResult(
+						{ kind: this.status.SUCCESS },
+						`Built ${part.name}: ${part.count.toFixed(0)}/${required.toFixed(0)}`,
+					);
+				}
+			}
+			if (part.count < required)
+				missing.push(
+					`${part.name}: ${part.count.toFixed(0)}/${required.toFixed(0)}. ${this.affordabilityCountdown(part.cost)}`,
+				);
+		}
+		if (
+			Object.entries(rocket.cost).every(
+				([id, required]) => parts.getPartData(id)?.count >= required,
+			)
+		) {
+			rockets.buildRocket("tier1Rocket");
+			if (rocket.built)
+				this.recordResult(
+					{ kind: this.status.SUCCESS },
+					`Built ${rocket.name}`,
+				);
+			else
+				this.rocketPlan = `Rocket parts ready; waiting for ${rocket.name} assembly.`;
+		} else {
+			this.rocketPlan = `Building parts for ${rocket.name}.\n${missing.join("\n")}`;
+		}
 	},
 
 	buyWonders() {
@@ -1196,6 +1256,7 @@ var automonkey = {
 					"Building affordable resource, power and science producers as inputs allow.",
 				this.sciencePlan(),
 				this.plasmaPlan,
+				this.rocketPlan,
 				...(this.buildingPlans?.values() ?? []),
 				powerPlan,
 			]

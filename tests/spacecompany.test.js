@@ -1741,3 +1741,227 @@ test("plasma growth respects disabled production and insufficient fuel productio
 		assert.deepEqual(state.purchases, []);
 	}
 });
+
+function rocketFixture(options = {}) {
+	const state = harness(options);
+	const rocket = {
+		name: "Rocket Ship",
+		htmlId: "roc_tier1Rocket",
+		unlocked: true,
+		built: false,
+		cost: { shield: 50, engine: 25, aero: 15 },
+	};
+	const parts = Object.fromEntries(
+		Object.entries(rocket.cost).map(([id, max]) => [
+			id,
+			{
+				name: id,
+				htmlId: `rocpart_${id}`,
+				unlocked: true,
+				count: 0,
+				max,
+				cost: { titanium: 10 },
+			},
+		]),
+	);
+	const visible = new Map(
+		[rocket, ...Object.values(parts)].map((item) => [
+			`${item.htmlId}_buy`,
+			true,
+		]),
+	);
+	const originalGet = state.context.document.getElementById;
+	state.context.document.getElementById = (id) =>
+		visible.has(id)
+			? {
+					classList: { contains: () => !visible.get(id) },
+					style: {},
+					parentElement: null,
+				}
+			: originalGet(id);
+	const navigation = { unlocked: true };
+	state.context.Game.interstellar.getInterstellarData = () => navigation;
+	state.context.Game.interstellar.rocketParts = {
+		getPartData: (id) => parts[id],
+		updateCost: (id) => {
+			parts[id].cost.titanium = Math.floor(10 * 1.1 ** parts[id].count);
+		},
+		buildPart(id, amount) {
+			assert.equal(amount, 1);
+			const part = parts[id];
+			if (state.stock.titanium < part.cost.titanium) return;
+			state.stock.titanium -= part.cost.titanium;
+			part.count++;
+			state.purchases.push(id);
+			this.updateCost(id);
+		},
+	};
+	state.context.Game.interstellar.rocket = {
+		getRocketData: () => rocket,
+		buildRocket() {
+			rocket.built = true;
+			state.purchases.push("rocket");
+		},
+	};
+	return { ...state, rocket, parts, visible, navigation };
+}
+
+test("rocket buys only missing parts and assembles immediately, then stops", () => {
+	const state = rocketFixture({ stock: { titanium: 1e9 } });
+	state.parts.engine.count = 25;
+	state.parts.aero.count = 15;
+	state.monkey.buyRocket();
+	assert.equal(state.parts.shield.count, 50);
+	assert.equal(state.purchases.filter((id) => id === "shield").length, 50);
+	assert.equal(state.purchases.at(-1), "rocket");
+	assert.equal(state.rocket.built, true);
+	const remaining = state.stock.titanium;
+	state.monkey.buyRocket();
+	assert.equal(state.stock.titanium, remaining);
+	assert.equal(state.purchases.length, 51);
+});
+
+test("rocket spending uses each current escalating price and resumes next tick", () => {
+	const state = rocketFixture({
+		stock: { titanium: 21 },
+		rates: { titanium: 10 },
+	});
+	state.monkey.buyRocket();
+	assert.equal(state.parts.shield.count, 2);
+	assert.equal(state.stock.titanium, 0);
+	assert.equal(state.parts.engine.count, 0);
+	assert.match(state.monkey.rocketPlan, /shield: 2\/50/);
+	state.stock.titanium = 10;
+	state.monkey.beginTick();
+	state.monkey.buyRocket();
+	assert.equal(state.parts.shield.count, 2);
+	assert.equal(state.parts.engine.count, 1);
+	assert.equal(state.stock.titanium, 0);
+});
+
+test("rocket parts respect navigation, ship and individual part availability", () => {
+	for (const blocked of ["navigation", "rocket", "button", "part"]) {
+		const state = rocketFixture({ stock: { titanium: 1e9 } });
+		if (blocked === "navigation") state.navigation.unlocked = false;
+		if (blocked === "rocket") state.rocket.unlocked = false;
+		if (blocked === "button") state.visible.set("roc_tier1Rocket_buy", false);
+		if (blocked === "part") state.parts.shield.unlocked = false;
+		state.monkey.buyRocket();
+		assert.equal(state.parts.shield.count, 0);
+		assert.equal(state.rocket.built, false);
+		if (blocked === "part")
+			assert.match(state.monkey.rocketPlan, /shield: waiting for unlock/);
+		else assert.equal(state.purchases.length, 0);
+	}
+	const state = rocketFixture({ stock: { titanium: 1e9 } });
+	state.visible.set("rocpart_shield_buy", false);
+	state.monkey.buyRocket();
+	assert.equal(state.parts.shield.count, 0);
+	assert.equal(state.parts.engine.count, 25);
+});
+
+test("failed native part or ship purchases do not loop or report success", () => {
+	const state = rocketFixture({ stock: { titanium: 1e9 } });
+	let attempts = 0;
+	state.context.Game.interstellar.rocketParts.buildPart = () => {
+		attempts++;
+	};
+	state.monkey.buyRocket();
+	assert.equal(attempts, 3);
+	assert.equal(state.purchases.length, 0);
+	for (const [id, amount] of Object.entries(state.rocket.cost))
+		state.parts[id].count = amount;
+	state.context.Game.interstellar.rocket.buildRocket = () => {};
+	state.monkey.buyRocket();
+	assert.equal(state.monkey.lastAction, null);
+	assert.match(state.monkey.rocketPlan, /waiting for Rocket Ship assembly/);
+});
+
+test("rocket parts and assembly continue during energy recovery", () => {
+	const state = rocketFixture({
+		rates: { energy: -100 },
+		stock: { titanium: 1e9 },
+	});
+	state.monkey.run();
+	assert.equal(state.rocket.built, true);
+	assert.equal(state.parts.shield.count, 50);
+	assert.equal(state.parts.engine.count, 25);
+	assert.equal(state.parts.aero.count, 15);
+	assert.deepEqual(state.canceled, []);
+});
+
+for (const [price, buysPrinter] of [
+	[149, true],
+	[150, true],
+	[151, false],
+]) {
+	test(`meteorite lower tier at ${price} obeys the inclusive half-price rule`, () => {
+		const state = meteoriteHarness(4, {
+			stock: { lunarite: 1000, silicon: 1000, uranium: 0 },
+			globals: {
+				printerLunariteCost: price,
+				printerSiliconCost: 0,
+				webLunariteCost: 100,
+				webSiliconCost: 100,
+				webUraniumCost: 100,
+			},
+		});
+		state.monkey.buildMeteoriteProduction();
+		assert.deepEqual(state.purchases, buysPrinter ? ["printer"] : []);
+		assert.equal(state.monkey.budget.plasma, buysPrinter ? 1 : 4);
+		if (!buysPrinter) {
+			assert.match(
+				state.monkey.buildingPlans.get("meteorite"),
+				/Saving for web/,
+			);
+			assert.equal(state.context.heater, 1);
+		}
+	});
+}
+
+test("meteorite comparisons refresh costs, include Printer discount and skip locked tiers", () => {
+	const state = meteoriteHarness(4, {
+		stock: { lunarite: 1000, silicon: 1000, uranium: 0 },
+		globals: {
+			T1Price: 0.5,
+			printerLunariteCost: 300,
+			printerSiliconCost: 2,
+			webLunariteCost: 100,
+			webSiliconCost: 100,
+			webUraniumCost: 100,
+		},
+	});
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, []);
+	assert.equal(state.monkey.weightedProducerCost("meteorite", "printer"), 151);
+	state.context.printerSiliconCost = 0;
+	state.monkey.beginTick();
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, ["printer"]);
+	state.available.set("getWeb", false);
+	state.context.printerSiliconCost = 2000;
+	state.monkey.beginTick();
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, ["printer", "printer"]);
+});
+
+test("meteorite saving switches to the higher tier once affordable, preserving plasma reserve", () => {
+	const state = meteoriteHarness(22, {
+		stock: { lunarite: 1000, silicon: 1000, uranium: 0 },
+		globals: {
+			printerLunariteCost: 151,
+			printerSiliconCost: 0,
+			webLunariteCost: 100,
+			webSiliconCost: 100,
+			webUraniumCost: 100,
+		},
+	});
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, []);
+	state.stock.uranium = 100;
+	state.monkey.beginTick();
+	state.monkey.buildMeteoriteProduction();
+	assert.deepEqual(state.purchases, ["web"]);
+	assert.equal(state.monkey.budget.plasma, 1);
+	assert.equal(state.monkey.buildingPlans.has("meteorite"), false);
+});
