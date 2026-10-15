@@ -9,18 +9,28 @@ var monkeyrunner = {
 			this.timeoutID = null;
 		}
 	},
+	start() {
+		if (this.timeoutID === null)
+			this.timeoutID = setInterval(() => {
+				this.myMonkey.run();
+				this.myMonkey.runAutoEmc();
+			}, 1000);
+	},
 	setup(targetMonkey) {
 		this.myMonkey = targetMonkey;
 		if (typeof this.timeoutID === "number") {
 			this.cancel();
 		}
 		this.myMonkey.setup();
-		this.timeoutID = setInterval(() => this.myMonkey.run(this.myMonkey), 1000);
+		this.start();
 		return `started at ${new Date().toLocaleTimeString()}`;
 	},
 };
 
 var automonkey = {
+	enabled: true,
+	autoEmcEnabled: false,
+	autoEmcResource: "metal",
 	itemHeadroom: 10,
 	powerWanted: 1000,
 	minimumEnergyRunway: 4 * 60 * 60,
@@ -224,6 +234,8 @@ var automonkey = {
 		this.plasmaPlan = null;
 		this.buildingPlans = new Map();
 		this.rocketPlan = null;
+		this.interstellarPlan = null;
+		this.interstellarSavings = null;
 	},
 
 	maxedOut(resource) {
@@ -249,6 +261,7 @@ var automonkey = {
 	},
 
 	run() {
+		if (!this.enabled) return;
 		try {
 			if (
 				Number.isFinite(Game.lastFixedUpdate) &&
@@ -265,6 +278,7 @@ var automonkey = {
 			}
 			this.beginTick();
 			this.manualResource();
+			this.workInterstellar();
 			this.buyWonders();
 			this.buyRocket();
 			if (this.recoverProduction()) {
@@ -324,6 +338,10 @@ var automonkey = {
 			this.updatePlan();
 		} catch (error) {
 			monkeyrunner.cancel();
+			this.enabled = false;
+			this.autoEmcEnabled = false;
+			this.updateAutoEmcControl();
+			this.updateEnabledControl();
 			console.error("Automonkey stopped", error);
 			this.setMessage(`Stopped: ${String(error)}`);
 			const plan = document.getElementById("automonkeyPlan");
@@ -426,6 +444,11 @@ var automonkey = {
 	tryBuildProducer(resource, producer) {
 		const checked = this.checkProducer(resource, producer);
 		if (checked.kind !== this.status.SUCCESS) return checked;
+		if (
+			this.interstellarSavings &&
+			!this.hasResources(this.producerCost(resource, producer))
+		)
+			return { kind: this.status.UNAFFORDABLE, producer };
 		try {
 			const before = window[producer];
 			if (!Number.isFinite(before))
@@ -479,6 +502,14 @@ var automonkey = {
 		);
 	},
 
+	numberIfy(value, digits) {
+		//! Converts a value to a number with the specified number of digits. Returns null if the value is not a finite number, also adds commas to numbers
+		const number = Number(value);
+		return Number.isFinite(number)
+			? Number(number.toFixed(digits)).toLocaleString()
+			: null;
+	},
+
 	shouldSaveForHigherTier(resource, producer) {
 		if (resource === "science") return false;
 		const producers = this.producers[resource];
@@ -497,7 +528,7 @@ var automonkey = {
 			return false;
 		this.buildingPlans.set(
 			resource,
-			`Saving for ${higher}: ${producer} costs ${price.toFixed(0)} weighted items, above half of ${higherPrice.toFixed(0)}.\n${this.affordabilityCountdown(this.producerCost(resource, higher))}`,
+			`Saving for ${higher}: ${producer} costs ${this.numberIfy(price)} weighted items, above half of ${this.numberIfy(higherPrice)}. ${this.affordabilityCountdown(this.producerCost(resource, higher))}`,
 		);
 		return true;
 	},
@@ -535,8 +566,11 @@ var automonkey = {
 					this.energySecondsAfterConsumption(0) < this.minimumEnergyRunway),
 		);
 		if (deficits.length === 0) return false;
+		this.interstellarSavings = null;
 		const summary = deficits
-			.map((resource) => `${resource}: ${this.budget[resource].toFixed(0)}/s`)
+			.map(
+				(resource) => `${resource}: ${this.numberIfy(this.budget[resource])}/s`,
+			)
 			.join(", ");
 		const blocked = [];
 		for (const resource of deficits) {
@@ -578,8 +612,8 @@ var automonkey = {
 				case this.status.INPUTS:
 					detail =
 						reason.input === "energy"
-							? `${reason.producer} would leave ${(reason.secondsRemaining / 3600).toFixed(0)}h of energy; needs at least ${reason.requiredSeconds / 3600}h`
-							: `${reason.producer} needs ${reason.required.toFixed(0)} ${reason.input}/s, available ${reason.available.toFixed(0)}/s`;
+							? `${reason.producer} would leave ${this.numberIfy(reason.secondsRemaining / 3600)}h of energy; needs at least ${reason.requiredSeconds / 3600}h`
+							: `${reason.producer} needs ${this.numberIfy(reason.required)} ${reason.input}/s, available ${this.numberIfy(reason.available)}/s`;
 					break;
 				case this.status.DISABLED:
 					detail = `${reason.producer} production is disabled or power-starved`;
@@ -655,7 +689,7 @@ var automonkey = {
 		const selected = this.selectPlasmaProducer();
 		if (!selected) return false;
 		if (selected.kind === this.status.UNAFFORDABLE) {
-			this.lastAction = `Saving for ${selected.producer} to ${purpose}.\n${this.affordabilityCountdown(selected.cost)}`;
+			this.lastAction = `Saving for ${selected.producer} to ${purpose}. ${this.affordabilityCountdown(selected.cost)}`;
 			this.plasmaPlan = this.lastAction;
 			this.setMessage(this.lastAction);
 			return false;
@@ -719,11 +753,13 @@ var automonkey = {
 		}
 	},
 
-	hasResources(cost) {
+	hasResources(cost, useSavings = true) {
 		return Object.entries(cost).every(
 			([resource, amount]) =>
 				Number.isFinite(amount) &&
-				Game.resources.getResource(resource) >= amount,
+				Game.resources.getResource(resource) >=
+					amount +
+						(useSavings ? (this.interstellarSavings?.[resource] ?? 0) : 0),
 		);
 	},
 
@@ -857,6 +893,7 @@ var automonkey = {
 	},
 
 	buildDyson() {
+		if (this.interstellarSavings) return;
 		if (!Game.tech.getTechData("unlockDyson")?.current) return;
 		let target;
 		if (window.ring < 3) target = "ring";
@@ -926,12 +963,217 @@ var automonkey = {
 		}
 	},
 
+	emcResources() {
+		return Object.keys(this.producers).filter(
+			(resource) =>
+				!["energy", "plasma", "meteorite", "science"].includes(resource),
+		);
+	},
+
+	updateRunner() {
+		if (this.enabled || this.autoEmcEnabled) monkeyrunner.start();
+		else monkeyrunner.cancel();
+	},
+
+	setAutoEmc(enabled, resource = this.autoEmcResource) {
+		if (!this.emcResources().includes(resource)) return;
+		this.autoEmcEnabled = enabled;
+		this.autoEmcResource = resource;
+		this.updateAutoEmcControl();
+		this.updateRunner();
+	},
+
+	updateAutoEmcControl() {
+		const toggle = document.getElementById("automonkeyEmcEnabled");
+		const select = document.getElementById("automonkeyEmcResource");
+		if (toggle) toggle.checked = this.autoEmcEnabled;
+		if (select) select.value = this.autoEmcResource;
+		this.setEmcMessage(
+			this.autoEmcEnabled
+				? `Auto EMC: ${this.autoEmcResource}.`
+				: "Auto EMC is off.",
+		);
+	},
+
+	setEmcMessage(message) {
+		const status = document.getElementById("automonkeyEmcMessage");
+		if (status) status.textContent = message;
+	},
+
+	runAutoEmc() {
+		if (!this.autoEmcEnabled) return;
+		try {
+			if (
+				Number.isFinite(Game.lastFixedUpdate) &&
+				Date.now() - Game.lastFixedUpdate > 2000
+			) {
+				this.setEmcMessage("Auto EMC: waiting for fresh production data.");
+				return;
+			}
+			const resource = this.autoEmcResource;
+			if (
+				!Game.tech.getTechData("unlockEmc")?.current ||
+				!this.isResourceAvailable(resource) ||
+				typeof window.convertEnergy !== "function"
+			) {
+				this.setEmcMessage(
+					"Auto EMC: waiting for EMC research and resource unlock.",
+				);
+				return;
+			}
+			if (window.energyLow || window.globalEnergyLock) {
+				this.setEmcMessage("Auto EMC: energy production is disabled or low.");
+				return;
+			}
+			if (!this.enabled || !this.budget) this.beginTick();
+			const current = Game.resources.getResource(resource);
+			const capacity = Game.resources.getStorage(resource);
+			const price = window[`${resource}EmcVal`];
+			const reserve = Math.max(
+				0,
+				-this.budget.energy * this.minimumEnergyRunway,
+			);
+			const available = Math.max(
+				0,
+				Game.resources.getResource("energy") - reserve,
+			);
+			const amount = Math.floor(
+				Math.min(
+					available / price,
+					capacity < 0 ? Infinity : capacity - current,
+				),
+			);
+			if (!(price > 0) || !Number.isFinite(amount) || amount <= 0) {
+				this.setEmcMessage(
+					capacity >= 0 && current >= capacity
+						? "Auto EMC: resource storage is full."
+						: "Auto EMC: waiting for spare energy.",
+				);
+				return;
+			}
+			const previousAmount = window.emcAmount;
+			try {
+				window.emcAmount = amount;
+				convertEnergy(resource, false);
+			} finally {
+				window.emcAmount = previousAmount;
+				if (typeof window.refreshConversionDisplay === "function")
+					refreshConversionDisplay();
+			}
+			const gained = Game.resources.getResource(resource) - current;
+			this.setEmcMessage(
+				gained > 0
+					? `Auto EMC: bought ${this.numberIfy(gained)} ${resource}.`
+					: "Auto EMC: conversion did not complete.",
+			);
+		} catch (error) {
+			this.autoEmcEnabled = false;
+			this.updateAutoEmcControl();
+			this.updateRunner();
+			console.error("Auto EMC stopped", error);
+			this.setEmcMessage(`Auto EMC stopped: ${String(error)}`);
+		}
+	},
+
 	convertResource(resource) {
 		if (!Game.tech.getTechData("unlockEmc")?.current) return;
 		if (resource === "meteorite") {
 			if (Game.tech.getTechData("unlockMeteorite")?.current)
 				convertPlasma(resource);
 		} else if (this.isResourceAvailable(resource)) convertEnergy(resource);
+	},
+
+	syncStargateUnlocks() {
+		if (!window.buttonsHidden?.includes("rebuildStargate")) return;
+		// Native Stargate completion references a nonexistent entry instead of its travel and military unlocks.
+		for (const id of ["travel", "military"]) {
+			const entry = Game.interstellar.getInterstellarData?.(id);
+			if (entry && !entry.unlocked) {
+				entry.unlocked = true;
+				entry.displayNeedsUpdate = true;
+			}
+		}
+	},
+
+	workInterstellar() {
+		if (!(window.sphere > 0)) return;
+		const interstellar = Game.interstellar;
+		this.syncStargateUnlocks();
+		const scout = interstellar.military?.getShipData("scout");
+		const drive = interstellar.antimatter?.getMachineData("drive");
+		const breakthrough =
+			interstellar.comms?.getMachineData("astroBreakthrough");
+		if (!scout || !drive || !breakthrough) return;
+		if (breakthrough.count >= 1 && scout.count >= 1 && drive.count >= 1) {
+			this.interstellarPlan =
+				"Interstellar flight ready: scout, Alcubierre drive and Astronomical Breakthrough complete.";
+			return;
+		}
+		if (!interstellar.rocket?.getRocketData("tier1Rocket")?.built) {
+			this.interstellarPlan =
+				"Working towards interstellar flight: complete the rocket and its wonder unlocks.";
+			return;
+		}
+		const [category, entry, id] =
+			scout.count < 1
+				? ["military", scout, "scout"]
+				: drive.count < 1
+					? ["antimatter", drive, "drive"]
+					: ["comms", breakthrough, "astroBreakthrough"];
+		this.interstellarPlan = `Working towards ${entry.name}.`;
+		if (
+			!entry.unlocked ||
+			!interstellar.getInterstellarData(category)?.unlocked ||
+			!this.isElementAvailable(document.getElementById(`${entry.htmlId}_buy`))
+		) {
+			this.interstellarPlan += " Waiting for the interstellar wonder unlock.";
+			return;
+		}
+		const module = interstellar[category];
+		module.updateCost(id);
+		if (id === "astroBreakthrough")
+			this.interstellarSavings = { ...entry.cost };
+		this.interstellarPlan += ` ${this.affordabilityCountdown(entry.cost)}`;
+		if (id === "drive") {
+			if (Object.values(this.budget).some((rate) => rate < 0)) {
+				this.interstellarPlan +=
+					"\nWaiting for production recovery before adding an Alcubierre drive.";
+				return;
+			}
+			if (window.antimatterToggled === false) {
+				this.interstellarPlan += "\nAntimatter production is disabled.";
+				return;
+			}
+			for (const [resource, rate] of Object.entries(entry.resourcePerSecond)) {
+				if (rate >= 0) continue;
+				const required = -rate + (resource === "plasma" ? 1 : 0);
+				if (this.budget[resource] >= required) continue;
+				this.interstellarPlan += `\nWaiting for ${this.numberIfy(required)} ${resource}/s spare capacity.`;
+				if (resource === "plasma")
+					this.buildPlasmaSupply(
+						"supply the Alcubierre drive and keep 1 plasma/s spare",
+					);
+				else this.buildProducers(resource, false, true);
+				return;
+			}
+		}
+		this.interstellarSavings = { ...entry.cost };
+		if (!this.hasResources(entry.cost, false)) return;
+		const before = entry.count;
+		if (category === "military") module.buildShip(id);
+		else module.buildMachine(id);
+		if (entry.count <= before) {
+			this.interstellarPlan +=
+				"\nPurchase did not complete; retrying next tick.";
+			return;
+		}
+		if (id === "drive") {
+			for (const [resource, rate] of Object.entries(entry.resourcePerSecond))
+				if (rate < 0) this.budget[resource] += rate;
+		}
+		this.interstellarSavings = null;
+		this.recordResult({ kind: this.status.SUCCESS }, `Built ${entry.name}`);
+		this.workInterstellar();
 	},
 
 	buyRocket() {
@@ -965,13 +1207,13 @@ var automonkey = {
 					if (part.count <= before) break;
 					this.recordResult(
 						{ kind: this.status.SUCCESS },
-						`Built ${part.name}: ${part.count.toFixed(0)}/${required.toFixed(0)}`,
+						`Built ${part.name}: ${this.numberIfy(part.count)}/${this.numberIfy(required)}`,
 					);
 				}
 			}
 			if (part.count < required)
 				missing.push(
-					`${part.name}: ${part.count.toFixed(0)}/${required.toFixed(0)}. ${this.affordabilityCountdown(part.cost)}`,
+					`${part.name}: ${this.numberIfy(part.count)}/${this.numberIfy(required)}. ${this.affordabilityCountdown(part.cost)}`,
 				);
 		}
 		if (
@@ -1014,7 +1256,20 @@ var automonkey = {
 				]),
 			);
 			if (!this.hasResources(cost)) continue;
-			window[func]();
+			try {
+				window[func]();
+			} catch (error) {
+				if (
+					func !== "rebuildStargate" ||
+					!(error instanceof TypeError) ||
+					!window.buttonsHidden?.includes(completed) ||
+					Game.interstellar.getInterstellarData?.("stargate") ||
+					!Game.interstellar.getInterstellarData?.("travel") ||
+					!Game.interstellar.getInterstellarData?.("military")
+				)
+					throw error;
+			}
+			this.syncStargateUnlocks();
 			if (window.buttonsHidden?.includes(completed))
 				this.recordResult({ kind: this.status.SUCCESS }, `Completed ${name}`);
 		}
@@ -1097,6 +1352,58 @@ var automonkey = {
 
 		const panel = document.getElementById("automonkeyPanel");
 		panel.style.fontSize = "200%";
+		if (!panel.querySelector("#automonkeyEnabled")) {
+			const control = document.createElement("p");
+			const label = document.createElement("label");
+			const toggle = document.createElement("input");
+			toggle.id = "automonkeyEnabled";
+			toggle.type = "checkbox";
+			label.htmlFor = toggle.id;
+			label.appendChild(toggle);
+			label.appendChild(document.createTextNode(" Automation enabled"));
+			control.appendChild(label);
+			panel.appendChild(control);
+		}
+		const toggle = panel.querySelector("#automonkeyEnabled");
+		panel.prepend(toggle.closest("p"));
+		toggle.onchange = () => this.setEnabled(toggle.checked);
+		this.updateEnabledControl();
+		if (!panel.querySelector("#automonkeyEmcEnabled")) {
+			const control = document.createElement("p");
+			const label = document.createElement("label");
+			const checkbox = document.createElement("input");
+			checkbox.id = "automonkeyEmcEnabled";
+			checkbox.type = "checkbox";
+			label.htmlFor = checkbox.id;
+			label.appendChild(checkbox);
+			label.appendChild(document.createTextNode(" Auto EMC "));
+			const select = document.createElement("select");
+			select.id = "automonkeyEmcResource";
+			select.setAttribute("aria-label", "Auto EMC resource");
+			for (const resource of this.emcResources()) {
+				const option = document.createElement("option");
+				option.value = resource;
+				option.textContent =
+					resource === "gem"
+						? "Gems"
+						: resource[0].toUpperCase() + resource.slice(1);
+				select.appendChild(option);
+			}
+			const status = document.createElement("span");
+			status.id = "automonkeyEmcMessage";
+			status.style.display = "block";
+			control.appendChild(label);
+			control.appendChild(select);
+			control.appendChild(status);
+			toggle.closest("p").after(control);
+		}
+		const emcToggle = panel.querySelector("#automonkeyEmcEnabled");
+		const emcSelect = panel.querySelector("#automonkeyEmcResource");
+		emcToggle.onchange = () =>
+			this.setAutoEmc(emcToggle.checked, emcSelect.value);
+		emcSelect.onchange = () =>
+			this.setAutoEmc(emcToggle.checked, emcSelect.value);
+		this.updateAutoEmcControl();
 		if (!panel.querySelector("#automonkeyEnergyRunway")) {
 			const control = document.createElement("p");
 			const label = document.createElement("label");
@@ -1156,6 +1463,23 @@ var automonkey = {
 		}
 	},
 
+	setEnabled(enabled) {
+		this.enabled = enabled;
+		this.updateRunner();
+		this.updateEnabledControl();
+		this.setMessage(
+			enabled
+				? "Automation enabled; resuming on the next tick."
+				: "Automation is off.",
+		);
+		this.updatePlan();
+	},
+
+	updateEnabledControl() {
+		const toggle = document.getElementById("automonkeyEnabled");
+		if (toggle) toggle.checked = this.enabled;
+	},
+
 	setEnergyRunwayHours(hours, persist = true) {
 		if (!Number.isInteger(hours) || hours < 1 || hours > 24) return false;
 		this.minimumEnergyRunway = hours * 60 * 60;
@@ -1196,7 +1520,7 @@ var automonkey = {
 
 	affordabilityCountdown(cost) {
 		const seconds = this.secondsUntilAffordable(cost);
-		if (seconds === 0) return "Resources ready.";
+		if (seconds === 0) return "";
 		if (!Number.isFinite(seconds))
 			return "No countdown available: a required resource is not increasing.";
 		const total = Math.ceil(seconds);
@@ -1210,7 +1534,7 @@ var automonkey = {
 		const waiting = (id, name) => {
 			const tech = Game.tech.getTechData(id);
 			return tech?.unlocked
-				? `Waiting for ${name}: ${Game.resources.getResource("science").toFixed(0)} / ${this.researchCost(id).science.toFixed(0)} science.\n${this.affordabilityCountdown(this.researchCost(id))}`
+				? `Waiting for ${name}: ${this.numberIfy(Game.resources.getResource("science"))} / ${this.numberIfy(this.researchCost(id).science)} science. ${this.affordabilityCountdown(this.researchCost(id))}`
 				: `Waiting for ${name} to become available.`;
 		};
 		const meteorite = [
@@ -1241,12 +1565,17 @@ var automonkey = {
 		const energy = Game.tech.getTechData("energyEfficiencyResearch");
 		if (energy?.maxLevel > 0 && energy.current >= energy.maxLevel)
 			return "Energy efficiency is maxed out.\nScience and resource efficiency have equal priority: buy the cheaper available upgrade first.";
-		return `Focusing on science and energy efficiency${energy ? ` (energy ${energy.current.toFixed(0)} / ${energy.maxLevel.toFixed(0)})` : ""}.\nResource efficiency is allowed only when its next upgrade costs less than 10% of both.\nBuy the cheaper priority upgrade first.`;
+		return `Focusing on science and energy efficiency${energy ? ` (energy ${this.numberIfy(energy.current)} / ${this.numberIfy(energy.maxLevel)})` : ""}.\nResource efficiency is allowed only when its next upgrade costs less than 10% of both.\nBuy the cheaper priority upgrade first.`;
 	},
 
 	updatePlan(prefix = "") {
 		const plan = document.getElementById("automonkeyPlan");
 		if (plan) {
+			if (!this.enabled) {
+				plan.textContent =
+					"Automation is off. Enable it to resume purchases and research.";
+				return;
+			}
 			const seconds = this.energySecondsAfterConsumption(0);
 			const powerPlan = Number.isFinite(seconds)
 				? `Energy runway: ${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m.\nNew powered buildings must leave at least ${this.minimumEnergyRunway / 3600}h.`
@@ -1257,9 +1586,11 @@ var automonkey = {
 				this.sciencePlan(),
 				this.plasmaPlan,
 				this.rocketPlan,
+				this.interstellarPlan,
 				...(this.buildingPlans?.values() ?? []),
 				powerPlan,
 			]
+				.map((message) => message?.trim())
 				.filter(Boolean)
 				.join("\n");
 		}

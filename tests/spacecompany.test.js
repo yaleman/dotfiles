@@ -211,6 +211,7 @@ test("tab appends without reference-node insertion and remains safe when pasted 
 		const createNode = () => ({
 			style: {},
 			setAttribute() {},
+			closest: () => ({}),
 			appendChild() {},
 		});
 		const tabList = {
@@ -227,11 +228,15 @@ test("tab appends without reference-node insertion and remains safe when pasted 
 			},
 		};
 		const elements = new Map([
+			["#automonkeyEnabled", createNode()],
+			["#automonkeyEmcEnabled", createNode()],
+			["#automonkeyEmcResource", createNode()],
 			["#automonkeyEnergyRunway", createNode()],
 			["#automonkeyPlan", createNode()],
 			["#automonkeyMessage", createNode()],
 		]);
 		const panel = {
+			prepend() {},
 			style: {},
 			querySelector: (selector) => elements.get(selector),
 			querySelectorAll: () => [],
@@ -509,10 +514,7 @@ test("countdown uses the slowest required resource, ignoring already affordable 
 		state.monkey.secondsUntilAffordable({ science: 20, metal: 10, wood: 10 }),
 		9,
 	);
-	assert.match(
-		state.monkey.affordabilityCountdown({ science: 10 }),
-		/Resources ready/,
-	);
+	assert.equal(state.monkey.affordabilityCountdown({ science: 10 }), "");
 	assert.match(
 		state.monkey.affordabilityCountdown({ science: 10.1 }),
 		/0h 00m 01s/,
@@ -1964,4 +1966,396 @@ test("meteorite saving switches to the higher tier once affordable, preserving p
 	assert.deepEqual(state.purchases, ["web"]);
 	assert.equal(state.monkey.budget.plasma, 1);
 	assert.equal(state.monkey.buildingPlans.has("meteorite"), false);
+});
+
+test("automation toggle defaults on, stops all tick actions, and resumes without duplicate intervals", () => {
+	const state = harness({ machines: [{ name: "lab" }] });
+	const toggle = {},
+		plan = {};
+	const getElement = state.context.document.getElementById;
+	state.context.document.getElementById = (id) =>
+		id === "automonkeyEnabled"
+			? toggle
+			: id === "automonkeyPlan"
+				? plan
+				: getElement(id);
+	state.monkey.updateEnabledControl();
+	assert.equal(state.monkey.enabled, true);
+	assert.equal(toggle.checked, true);
+	let starts = 0;
+	state.context.setInterval = () => {
+		starts++;
+		return 2;
+	};
+	state.monkey.setEnabled(false);
+	assert.equal(toggle.checked, false);
+	assert.deepEqual(state.canceled, [1]);
+	assert.equal(state.context.monkeyrunner.timeoutID, null);
+	state.monkey.run();
+	assert.deepEqual(state.purchases, []);
+	assert.deepEqual(state.gathering, []);
+	assert.match(plan.textContent, /Automation is off/);
+	state.monkey.setEnergyRunwayHours(2);
+	assert.match(plan.textContent, /Automation is off/);
+	state.monkey.setEnabled(true);
+	state.monkey.setEnabled(true);
+	assert.equal(starts, 1);
+	assert.equal(toggle.checked, true);
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["lab"]);
+	assert.equal(state.gathering.length, 4);
+});
+
+test("reused tab toggle binds to the current automation and reflects its state", () => {
+	const state = harness();
+	const control = {};
+	const toggle = { closest: () => control };
+	const children = [{}, control];
+	const elements = new Map([
+		["#automonkeyEnabled", toggle],
+		["#automonkeyEmcEnabled", {}],
+		["#automonkeyEmcResource", {}],
+		["#automonkeyEnergyRunway", {}],
+		["#automonkeyPlan", { style: {} }],
+		["#automonkeyMessage", {}],
+	]);
+	const panel = {
+		prepend(node) {
+			children.splice(children.indexOf(node), 1);
+			children.unshift(node);
+		},
+		style: {},
+		querySelector: (selector) => elements.get(selector),
+		querySelectorAll: () => [],
+	};
+	const nodes = new Map([
+		["tabList", {}],
+		["tabContent", {}],
+		["automonkeyPanel", panel],
+		["automonkeyTab", {}],
+		["automonkeyEnabled", toggle],
+	]);
+	state.context.document.getElementById = (id) => nodes.get(id);
+	state.monkey.injectCustomTab();
+	assert.equal(children[0], control);
+	assert.equal(toggle.checked, true);
+	toggle.checked = false;
+	toggle.onchange();
+	assert.equal(state.monkey.enabled, false);
+	state.monkey.injectCustomTab();
+	assert.equal(children[0], control);
+	assert.equal(children.length, 2);
+	assert.equal(toggle.checked, false);
+	toggle.checked = true;
+	toggle.onchange();
+	assert.equal(state.monkey.enabled, true);
+});
+
+test("tick errors turn the automation toggle off while preserving the error message", () => {
+	const state = harness();
+	const toggle = {};
+	state.context.document.getElementById = (id) =>
+		id === "automonkeyEnabled" ? toggle : null;
+	state.monkey.buyWonders = () => {
+		throw new Error("broken purchase");
+	};
+	state.monkey.run();
+	assert.equal(state.monkey.enabled, false);
+	assert.equal(toggle.checked, false);
+	assert.match(state.messages.at(-1), /Stopped: Error: broken purchase/);
+	assert.equal(state.context.monkeyrunner.timeoutID, null);
+});
+
+function emcHarness(extra = {}) {
+	const state = harness({
+		stock: { energy: 1000, metal: 0 },
+		rates: { energy: 10 },
+		technologies: { unlockEmc: purchasedTech() },
+		globals: { metalEmcVal: 2, oilEmcVal: 5, emcAmount: "Max" },
+		...extra,
+	});
+	state.context.convertEnergy = (resource) => {
+		const amount = state.context.emcAmount;
+		const price = state.context[`${resource}EmcVal`];
+		state.stock.energy -= amount * price;
+		state.stock[resource] = (state.stock[resource] ?? 0) + amount;
+		state.purchases.push(resource);
+	};
+	return state;
+}
+
+test("auto EMC defaults off and operates independently of the main toggle", () => {
+	const state = emcHarness();
+	state.monkey.runAutoEmc();
+	assert.deepEqual(state.purchases, []);
+	state.monkey.setAutoEmc(true);
+	state.monkey.setEnabled(false);
+	assert.equal(state.context.monkeyrunner.timeoutID, 1);
+	state.monkey.runAutoEmc();
+	assert.equal(state.stock.metal, 500);
+	assert.equal(state.stock.energy, 0);
+	assert.equal(state.context.emcAmount, "Max");
+	state.monkey.setAutoEmc(false);
+	assert.equal(state.context.monkeyrunner.timeoutID, null);
+});
+
+test("auto EMC resource selection respects storage and uses current prices", () => {
+	const state = emcHarness({
+		stock: { energy: 1000, oil: 95 },
+		storage: { oil: 100 },
+	});
+	state.monkey.setAutoEmc(true, "oil");
+	state.monkey.runAutoEmc();
+	assert.equal(state.stock.oil, 100);
+	assert.equal(state.stock.energy, 975);
+	state.monkey.runAutoEmc();
+	assert.deepEqual(state.purchases, ["oil"]);
+	state.monkey.setAutoEmc(true, "meteorite");
+	assert.equal(state.monkey.autoEmcResource, "oil");
+});
+
+test("auto EMC preserves energy runway including same-tick consumption", () => {
+	const state = emcHarness({
+		stock: { energy: 144010 },
+		rates: { energy: -10 },
+	});
+	state.monkey.setAutoEmc(true);
+	state.monkey.runAutoEmc();
+	assert.equal(state.stock.metal, 5);
+	assert.equal(state.stock.energy, 144000);
+	state.monkey.runAutoEmc();
+	assert.equal(state.purchases.length, 1);
+	state.stock.energy = 200000;
+	state.monkey.budget.energy = -20;
+	state.monkey.runAutoEmc();
+	assert.equal(state.purchases.length, 1);
+});
+
+test("auto EMC waits for research, visible resource, fresh data and energy locks", () => {
+	for (const block of ["research", "resource", "stale", "lock", "low"]) {
+		const state = emcHarness();
+		state.monkey.setAutoEmc(true);
+		if (block === "research") state.technologies.unlockEmc.current = 0;
+		if (block === "resource")
+			state.context.document.getElementById = () => null;
+		if (block === "stale")
+			state.context.Game.lastFixedUpdate = Date.now() - 3000;
+		if (block === "lock") state.context.globalEnergyLock = true;
+		if (block === "low") state.context.energyLow = true;
+		state.monkey.runAutoEmc();
+		assert.deepEqual(state.purchases, []);
+	}
+});
+
+test("auto EMC failure restores conversion quantity and disables only EMC", () => {
+	const state = emcHarness();
+	state.context.convertEnergy = () => {
+		throw new Error("conversion failed");
+	};
+	state.monkey.setAutoEmc(true);
+	state.monkey.runAutoEmc();
+	assert.equal(state.monkey.autoEmcEnabled, false);
+	assert.equal(state.monkey.enabled, true);
+	assert.equal(state.context.emcAmount, "Max");
+	assert.equal(state.context.monkeyrunner.timeoutID, 1);
+});
+
+function interstellarHarness(options = {}) {
+	const state = harness({
+		rates: { energy: 100, plasma: 101, ice: 12000 },
+		stock: { metal: 1000, oil: 1000, silver: 1000, ice: 1000, meteorite: 1000 },
+		globals: { sphere: 1, antimatterToggled: true },
+		...options,
+	});
+	const entries = {
+		military: {
+			name: "Scout",
+			htmlId: "milit_scout",
+			unlocked: true,
+			count: 0,
+			cost: { metal: 100 },
+		},
+		antimatter: {
+			name: "Alcubierre Drive",
+			htmlId: "antimatter_drive",
+			unlocked: true,
+			count: 0,
+			cost: { silver: 100 },
+			resourcePerSecond: { antimatter: 0.5, plasma: -100, ice: -12000 },
+		},
+		comms: {
+			name: "Astronomical Breakthrough",
+			htmlId: "comm_astroBreakthrough",
+			unlocked: true,
+			count: 0,
+			max: 1,
+			cost: { metal: 600, ice: 600, meteorite: 60 },
+		},
+	};
+	const navigation = {
+		military: { unlocked: true },
+		antimatter: { unlocked: true },
+		comms: { unlocked: true },
+	};
+	const originalGet = state.context.document.getElementById;
+	const visible = new Map(
+		Object.values(entries).map((entry) => [`${entry.htmlId}_buy`, true]),
+	);
+	state.context.document.getElementById = (id) =>
+		visible.has(id)
+			? {
+					classList: { contains: () => !visible.get(id) },
+					style: {},
+					parentElement: null,
+				}
+			: originalGet(id);
+	state.context.Game.interstellar.getInterstellarData = (id) => navigation[id];
+	const rocket = { built: true };
+	state.context.Game.interstellar.rocket = { getRocketData: () => rocket };
+	for (const [category, entry] of Object.entries(entries)) {
+		const buy = () => {
+			if (!state.monkey.hasResources(entry.cost, false)) return;
+			for (const [resource, amount] of Object.entries(entry.cost))
+				state.stock[resource] -= amount;
+			entry.count++;
+			state.purchases.push(category);
+		};
+		state.context.Game.interstellar[category] = {
+			getShipData: () => entry,
+			getMachineData: () => entry,
+			updateCost() {},
+			buildShip: buy,
+			buildMachine: buy,
+		};
+	}
+	return { ...state, entries, navigation, visible, rocket };
+}
+
+test("post-sphere progression builds a scout, one drive and Astronomical Breakthrough in order", () => {
+	const state = interstellarHarness();
+	state.monkey.workInterstellar();
+	assert.deepEqual(state.purchases, ["military", "antimatter", "comms"]);
+	assert.equal(state.monkey.budget.plasma, 1);
+	assert.equal(state.monkey.budget.ice, 0);
+	assert.match(state.monkey.interstellarPlan, /flight ready/);
+	state.monkey.beginTick();
+	state.monkey.workInterstellar();
+	assert.equal(state.purchases.length, 3);
+});
+
+test("interstellar progression respects sphere, rocket, research navigation and native controls", () => {
+	for (const blocker of ["sphere", "rocket", "nav", "entry", "button"]) {
+		const state = interstellarHarness();
+		if (blocker === "sphere") state.context.sphere = 0;
+		if (blocker === "rocket") state.rocket.built = false;
+		if (blocker === "nav") state.navigation.military.unlocked = false;
+		if (blocker === "entry") state.entries.military.unlocked = false;
+		if (blocker === "button") state.visible.set("milit_scout_buy", false);
+		state.monkey.workInterstellar();
+		assert.deepEqual(state.purchases, []);
+	}
+});
+
+test("Alcubierre drive requires safe plasma and ice production and honors its toggle", () => {
+	for (const blocker of ["plasma", "ice", "toggle"]) {
+		const state = interstellarHarness();
+		state.entries.military.count = 1;
+		if (blocker === "plasma") state.monkey.budget.plasma = 100.99;
+		if (blocker === "ice") state.monkey.budget.ice = 11999;
+		if (blocker === "toggle") state.context.antimatterToggled = false;
+		state.monkey.workInterstellar();
+		assert.deepEqual(state.purchases, []);
+		assert.equal(state.entries.antimatter.count, 0);
+	}
+});
+
+test("Astronomical Breakthrough reserves its materials against ordinary purchases and Dyson", () => {
+	const state = interstellarHarness({
+		machines: [{ name: "miner", costs: { metal: 500 } }],
+		stock: { metal: 600, ice: 500, meteorite: 60 },
+	});
+	state.entries.military.count = 1;
+	state.entries.antimatter.count = 1;
+	state.monkey.workInterstellar();
+	assert.match(state.monkey.interstellarPlan, /Astronomical Breakthrough/);
+	assert.equal(state.monkey.hasResources({ metal: 1 }), false);
+	assert.equal(
+		state.monkey.tryBuildProducer("metal", "miner").kind,
+		state.monkey.status.UNAFFORDABLE,
+	);
+	state.monkey.buildDyson();
+	assert.deepEqual(state.purchases, []);
+	state.stock.ice = 600;
+	state.monkey.beginTick();
+	state.monkey.workInterstellar();
+	assert.deepEqual(state.purchases, ["comms"]);
+	assert.equal(state.monkey.interstellarSavings, null);
+});
+
+test("failed native interstellar purchases do not advance the plan or report success", () => {
+	const state = interstellarHarness();
+	state.context.Game.interstellar.military.buildShip = () => {};
+	state.monkey.workInterstellar();
+	assert.deepEqual(state.purchases, []);
+	assert.equal(state.monkey.lastAction, null);
+	assert.match(state.monkey.interstellarPlan, /did not complete/);
+});
+
+test("completed native Stargate bug repairs travel and military while unrelated failures still stop", () => {
+	for (const completed of [true, false]) {
+		let state;
+		state = harness({
+			globals: {
+				buttonsHidden: [],
+				stargateWonderPlasmaCost: 0,
+				stargateWonderSiliconCost: 0,
+				stargateWonderMeteoriteCost: 0,
+			},
+			actions: {
+				rebuildStargate() {
+					if (completed) state.context.buttonsHidden.push("rebuildStargate");
+					throw vm.runInContext(
+						'new TypeError("missing native entry")',
+						state.context,
+					);
+				},
+			},
+		});
+		const navigation = {
+			travel: { unlocked: false },
+			military: { unlocked: false },
+		};
+		state.context.Game.interstellar.getInterstellarData = (id) =>
+			navigation[id];
+		state.monkey.run();
+		assert.equal(navigation.travel.unlocked, completed);
+		assert.equal(navigation.military.unlocked, completed);
+		assert.equal(state.monkey.enabled, completed);
+		if (completed) assert.equal(navigation.travel.displayNeedsUpdate, true);
+	}
+});
+
+test("normal ticks run interstellar progression before competing construction", () => {
+	const state = interstellarHarness();
+	state.monkey.run();
+	assert.deepEqual(state.purchases.slice(0, 3), [
+		"military",
+		"antimatter",
+		"comms",
+	]);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("interstellar savings protect the first scout but yield to deficit recovery", () => {
+	const state = interstellarHarness({
+		rates: { metal: -1 },
+		stock: { metal: 99 },
+		machines: [{ name: "miner", costs: { metal: 10 } }],
+	});
+	state.monkey.workInterstellar();
+	assert.equal(state.monkey.hasResources({ metal: 10 }), false);
+	assert.equal(state.monkey.interstellarSavings.metal, 100);
+	state.monkey.recoverProduction();
+	assert.deepEqual(state.purchases, ["miner"]);
+	assert.equal(state.monkey.interstellarSavings, null);
 });
