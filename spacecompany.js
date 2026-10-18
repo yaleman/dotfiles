@@ -36,6 +36,13 @@ var automonkey = {
 	minimumEnergyRunway: 4 * 60 * 60,
 	energyRunwayStorageKey: "automonkey.minimumEnergyRunwayHours",
 	maxSwarms: 6,
+	batteryProducers: [
+		"batteryT5",
+		"batteryT4",
+		"batteryT3",
+		"batteryT2",
+		"battery",
+	],
 	wonders: [
 		[
 			"Precious wonder",
@@ -178,6 +185,7 @@ var automonkey = {
 		helium: ["cage", "skimmer", "compressor", "tanker", "drone"],
 		ice: ["overexchange", "mrFreeze", "freezer", "iceDrill", "icePick"],
 		meteorite: ["nebulous", "smasher", "web", "printer"],
+		rocketFuel: ["hydrazine", "oxidisation", "chemicalPlant"],
 		science: ["labT5", "labT4", "labT3", "labT2", "lab"],
 	},
 
@@ -234,6 +242,7 @@ var automonkey = {
 		this.plasmaPlan = null;
 		this.buildingPlans = new Map();
 		this.rocketPlan = null;
+		this.explorationPlan = null;
 		this.interstellarPlan = null;
 		this.interstellarSavings = null;
 	},
@@ -281,17 +290,19 @@ var automonkey = {
 			this.workInterstellar();
 			this.buyWonders();
 			this.buyRocket();
-			if (this.recoverProduction()) {
+			const recovering = this.recoverProduction();
+			this.exploreSolarSystem(!recovering);
+			if (recovering) {
 				this.unlockProgressionResearch(false);
 				this.buyEarlyScience();
-				this.buildProducers("science", true);
+				this.buildZeroPowerProducers();
 				this.setMessage(
 					[
 						...new Set([this.recoveryMessage, this.lastAction].filter(Boolean)),
 					].join("\n"),
 				);
 				this.updatePlan(
-					"Recovering resource production. Science-funded research and science buildings continue; other building purchases are paused.",
+					"Recovering resource production. Science-funded research and zero-power producers continue; other powered purchases are paused.",
 				);
 				return;
 			}
@@ -320,14 +331,20 @@ var automonkey = {
 			this.buyWonders();
 			this.upgradeStorage();
 			this.buyEarlyScience();
+			this.buyBatteries();
 			this.buildProducers("science");
+			this.buildZeroPowerProducers();
 			const powered =
 				Game.resources.getResource("energy") > this.powerWanted &&
 				!window.energyLow &&
 				!window.globalEnergyLock &&
 				this.energySecondsAfterConsumption(0) >= this.minimumEnergyRunway;
 			for (const resource of Object.keys(this.producers)) {
-				if (["energy", "plasma", "meteorite", "science"].includes(resource))
+				if (
+					["energy", "plasma", "meteorite", "science", "rocketFuel"].includes(
+						resource,
+					)
+				)
 					continue;
 				this.buildProducers(resource, !powered);
 			}
@@ -403,6 +420,7 @@ var automonkey = {
 				(resource === "energy" || inputs.energy > 0)) ||
 			(window.energyLow && inputs.energy > 0) ||
 			(resource === "charcoal" && !window.charcoalToggled) ||
+			(resource === "rocketFuel" && !window.rocketFuelToggled) ||
 			(resource === "meteorite" &&
 				(!window.meteoriteToggled || !this.hasMeteoritePrerequisites())) ||
 			(resource === "plasma" && !window[`${producer}Toggled`])
@@ -480,8 +498,13 @@ var automonkey = {
 	},
 
 	producerCost(resource, producer) {
+		const producers =
+			resource === "batteries"
+				? this.batteryProducers
+				: this.producers[resource];
 		const tierOne =
-			this.producers[resource].at(-1) === producer && resource !== "science";
+			producers.at(-1) === producer &&
+			!["science", "rocketFuel"].includes(resource);
 		const discount = tierOne ? window.T1Price : 1;
 		return Object.fromEntries(
 			[...new Set(Object.values(RESOURCE))].flatMap((input) => {
@@ -510,9 +533,12 @@ var automonkey = {
 			: null;
 	},
 
-	shouldSaveForHigherTier(resource, producer) {
+	shouldSaveForHigherTier(
+		resource,
+		producer,
+		producers = this.producers[resource],
+	) {
 		if (resource === "science") return false;
-		const producers = this.producers[resource];
 		const higher = producers
 			.slice(0, producers.indexOf(producer))
 			.reverse()
@@ -533,7 +559,15 @@ var automonkey = {
 		return true;
 	},
 
-	buildProducers(resource, freeOnly = false, productionNeeded = false) {
+	buildZeroPowerProducers() {
+		for (const resource of Object.keys(this.producers)) {
+			if (["energy", "plasma", "meteorite", "rocketFuel"].includes(resource))
+				continue;
+			this.buildProducers(resource, true);
+		}
+	},
+
+	buildProducers(resource, zeroPowerOnly = false, productionNeeded = false) {
 		if (!productionNeeded && this.maxedOut(resource)) return;
 		const producers = this.producers[resource];
 		for (const producer of producers) {
@@ -543,14 +577,10 @@ var automonkey = {
 				)
 			)
 				continue;
-			if (
-				freeOnly &&
-				Object.values(this.producerInputs(producer)).some(
-					(amount) => amount > 0,
-				)
-			)
+			if (zeroPowerOnly && (this.producerInputs(producer).energy ?? 0) > 0)
 				continue;
-			if (this.shouldSaveForHigherTier(resource, producer)) continue;
+			if (!zeroPowerOnly && this.shouldSaveForHigherTier(resource, producer))
+				continue;
 			this.recordResult(
 				this.tryBuildProducer(resource, producer),
 				`Built ${producer}`,
@@ -839,6 +869,35 @@ var automonkey = {
 			this.buyResearch(id);
 	},
 
+	buyBatteries() {
+		const t4Complete = Game.tech.getTechData("unlockLabT4")?.current > 0;
+		const unlocked = this.batteryProducers.filter((producer) => {
+			if (producer !== "battery" && !t4Complete) return false;
+			const research =
+				producer === "battery"
+					? "unlockBatteries"
+					: `unlockBatteries${producer.slice(7)}`;
+			return (
+				(producer === "batteryT5" ||
+					Game.tech.getTechData(research)?.current > 0) &&
+				this.isActionAvailable(
+					`get${producer[0].toUpperCase()}${producer.slice(1)}`,
+				)
+			);
+		});
+		for (const producer of unlocked) {
+			if (
+				this.shouldSaveForHigherTier("batteries", producer, unlocked) ||
+				!this.hasResources(this.producerCost("batteries", producer))
+			)
+				continue;
+			this.recordResult(
+				this.tryBuildProducer("batteries", producer),
+				`Built ${producer}`,
+			);
+		}
+	},
+
 	buyEarlyScience() {
 		for (const id of [
 			"unlockBasicEnergy",
@@ -849,6 +908,7 @@ var automonkey = {
 			"unlockStorage",
 			"unlockLabT2",
 			"unlockLabT3",
+			"unlockBatteries",
 			"unlockLabT4",
 			"unlockRocketFuelT2",
 			"unlockDestruction",
@@ -861,7 +921,6 @@ var automonkey = {
 		for (const id of [
 			"unlockPSU",
 			"unlockPSUT2",
-			"unlockBatteries",
 			"unlockBatteriesT2",
 			"unlockBatteriesT3",
 			"unlockBatteriesT4",
@@ -966,7 +1025,9 @@ var automonkey = {
 	emcResources() {
 		return Object.keys(this.producers).filter(
 			(resource) =>
-				!["energy", "plasma", "meteorite", "science"].includes(resource),
+				!["energy", "plasma", "meteorite", "science", "rocketFuel"].includes(
+					resource,
+				),
 		);
 	},
 
@@ -1081,6 +1142,100 @@ var automonkey = {
 			if (Game.tech.getTechData("unlockMeteorite")?.current)
 				convertPlasma(resource);
 		} else if (this.isResourceAvailable(resource)) convertEnergy(resource);
+	},
+
+	exploreSolarSystem(allowFuelProduction = true) {
+		if (!Game.tech.getTechData("unlockSolarSystem")?.current) {
+			this.explorationPlan =
+				"Waiting for Space research to unlock solar-system exploration.";
+			return;
+		}
+		const waitForFuel = (fuel, purpose) => {
+			this.explorationPlan =
+				`${purpose}\n${this.affordabilityCountdown({ rocketFuel: fuel })}`.trim();
+			if (window.rocketFuelToggled === false) {
+				this.explorationPlan += "\nRocket fuel production is disabled.";
+				return;
+			}
+			if (allowFuelProduction) this.buildProducers("rocketFuel", false, true);
+			else
+				this.explorationPlan +=
+					"\nAdditional fuel producers wait for production recovery.";
+		};
+		if (!window.rocketLaunched) {
+			if (!(window.rocket >= 1)) {
+				const cost = { metal: 1200, gem: 900, oil: 1000 };
+				this.explorationPlan =
+					`Building the first solar-system rocket.\n${this.affordabilityCountdown(cost)}`.trim();
+				if (!this.isActionAvailable("getRocket") || !this.hasResources(cost))
+					return;
+				getRocket();
+				if (!(window.rocket >= 1)) return;
+				this.recordResult(
+					{ kind: this.status.SUCCESS },
+					"Built solar-system rocket",
+				);
+			}
+			if (!this.isActionAvailable("launchRocket")) return;
+			if (!this.hasResources({ rocketFuel: 20 })) {
+				waitForFuel(
+					20,
+					"Waiting for 20 rocket fuel to launch the solar-system rocket.",
+				);
+				return;
+			}
+			launchRocket();
+			if (!window.rocketLaunched) return;
+			this.recordResult(
+				{ kind: this.status.SUCCESS },
+				"Launched solar-system rocket",
+			);
+		}
+		const destinations = [
+			["Moon", 20],
+			["Venus", 50],
+			["Mars", 80],
+			["AsteroidBelt", 200],
+			["WonderStation", 500],
+			["Jupiter", 1000],
+			["Saturn", 2000],
+			["Pluto", 5000],
+			["KuiperBelt", 6000],
+			["SolCenter", 7000],
+		];
+		const completed = (name) =>
+			window.buttonsHidden?.includes(`explore${name}`) ||
+			window.explored?.includes(name[0].toLowerCase() + name.slice(1));
+		for (const [name, fuel] of destinations) {
+			if (completed(name)) continue;
+			const navigation = document.getElementById(
+				name[0].toLowerCase() + name.slice(1),
+			);
+			const action = document.getElementById(`explore${name}`);
+			if (
+				typeof window.explore !== "function" ||
+				!this.isElementAvailable(navigation) ||
+				!this.isElementAvailable(action)
+			)
+				continue;
+			const label = name.replace(/([a-z])([A-Z])/g, "$1 $2");
+			if (!this.hasResources({ rocketFuel: fuel })) {
+				waitForFuel(
+					fuel,
+					`Waiting to explore ${label}: ${fuel.toFixed(0)} rocket fuel.`,
+				);
+				return;
+			}
+			explore(name);
+			if (!completed(name)) {
+				this.explorationPlan = `Exploration of ${label} did not complete; retrying next tick.`;
+				return;
+			}
+			this.recordResult({ kind: this.status.SUCCESS }, `Explored ${label}`);
+		}
+		this.explorationPlan = destinations.every(([name]) => completed(name))
+			? "Solar-system exploration complete."
+			: "Waiting for the next solar-system destination to unlock.";
 	},
 
 	syncStargateUnlocks() {
@@ -1548,7 +1703,7 @@ var automonkey = {
 		if (meteorite)
 			return `${waiting(meteorite, Game.tech.getTechData(meteorite).name ?? "meteorite research")}\nMeteorite research takes priority.`;
 		if (!Game.tech.getTechData("unlockLabT4")?.current)
-			return `${waiting("unlockLabT4", "T4 science")}\nBatteries, PSUs and efficiency upgrades wait until T4 is complete.`;
+			return `${waiting("unlockLabT4", "T4 science")}\nT1 batteries are allowed. Higher battery tiers, PSUs and efficiency upgrades wait until T4 is complete.`;
 		const storage = [
 			"unlockPSU",
 			"unlockPSUT2",
@@ -1586,6 +1741,7 @@ var automonkey = {
 				this.sciencePlan(),
 				this.plasmaPlan,
 				this.rocketPlan,
+				this.explorationPlan,
 				this.interstellarPlan,
 				...(this.buildingPlans?.values() ?? []),
 				powerPlan,

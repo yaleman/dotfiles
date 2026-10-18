@@ -550,14 +550,11 @@ test("meteorite and storage waits include their own countdowns", () => {
 			unlockPSU: research(600, { name: "Plasma Storage Units" }),
 		},
 	});
-	assert.match(
-		state.monkey.sciencePlan(),
-		/Waiting for Meteorite.*\n.*0h 00m 10s/,
-	);
+	assert.match(state.monkey.sciencePlan(), /Waiting for Meteorite.*0h 00m 10s/);
 	state.technologies.unlockMeteorite.current = 1;
 	assert.match(
 		state.monkey.sciencePlan(),
-		/Waiting for Plasma Storage Units.*\n.*0h 01m 00s/,
+		/Waiting for Plasma Storage Units.*0h 01m 00s/,
 	);
 });
 
@@ -568,11 +565,11 @@ test("plan explains T4 waiting with whole-number science costs", () => {
 	});
 	assert.match(
 		state.monkey.sciencePlan(),
-		/Waiting for T4 science: 12 \/ 50000000 science/,
+		/Waiting for T4 science: 12 \/ 50,000,000 science/,
 	);
 	assert.match(
 		state.monkey.sciencePlan(),
-		/Batteries, PSUs and efficiency upgrades wait/,
+		/Higher battery tiers, PSUs and efficiency upgrades wait/,
 	);
 	state.technologies.unlockLabT4.unlocked = false;
 	assert.match(state.monkey.sciencePlan(), /T4 science to become available/);
@@ -606,7 +603,7 @@ test("plan updates separately from action messages and explains recovery pauses"
 	state.monkey.run();
 	assert.match(
 		plan.textContent,
-		/Science-funded research and science buildings continue; other building purchases are paused/,
+		/Science-funded research and zero-power producers continue; other powered purchases are paused/,
 	);
 	assert.match(plan.textContent, /Waiting for T4 science/);
 	assert.ok(state.messages.length > 0);
@@ -651,7 +648,7 @@ test("available meteorite science takes priority without purchased Dyson researc
 	assert.deepEqual(state.purchases, ["unlockMeteorite"]);
 });
 
-test("battery and PSU research wait for T4 and unlock complete chains afterward", () => {
+test("T1 battery research precedes T4 while higher batteries and PSUs wait", () => {
 	const technologies = { unlockLabT4: research(100) };
 	for (const chain of [
 		["unlockPSU", "unlockPSUT2"],
@@ -671,14 +668,14 @@ test("battery and PSU research wait for T4 and unlock complete chains afterward"
 	technologies.scienceEfficiencyResearch = research(10, { maxLevel: -1 });
 	const state = harness({ stock: { science: 99 }, technologies });
 	state.monkey.buyEarlyScience();
-	assert.deepEqual(state.purchases, []);
+	assert.deepEqual(state.purchases, ["unlockBatteries"]);
 	state.stock.science = 106;
 	state.monkey.buyEarlyScience();
 	assert.deepEqual(state.purchases, [
+		"unlockBatteries",
 		"unlockLabT4",
 		"unlockPSU",
 		"unlockPSUT2",
-		"unlockBatteries",
 		"unlockBatteriesT2",
 		"unlockBatteriesT3",
 		"unlockBatteriesT4",
@@ -1334,7 +1331,7 @@ test("plasma saves for efficient T2 instead of repeatedly buying affordable heat
 	state.available.set("getBath", false);
 	state.monkey.buildPlasmaSupply("supply meteorite");
 	assert.deepEqual(state.purchases, []);
-	assert.match(state.monkey.plasmaPlan, /Saving for plasmatic.*\n.*0h 00m 10s/);
+	assert.match(state.monkey.plasmaPlan, /Saving for plasmatic.*0h 00m 10s/);
 	const plan = { textContent: "" };
 	state.context.document.getElementById = (id) =>
 		id === "automonkeyPlan" ? plan : null;
@@ -2358,4 +2355,392 @@ test("interstellar savings protect the first scout but yield to deficit recovery
 	state.monkey.recoverProduction();
 	assert.deepEqual(state.purchases, ["miner"]);
 	assert.equal(state.monkey.interstellarSavings, null);
+});
+
+const solarDestinations = [
+	["Moon", 20],
+	["Venus", 50],
+	["Mars", 80],
+	["AsteroidBelt", 200],
+	["WonderStation", 500],
+	["Jupiter", 1000],
+	["Saturn", 2000],
+	["Pluto", 5000],
+	["KuiperBelt", 6000],
+	["SolCenter", 7000],
+];
+function solarHarness(options = {}) {
+	let state;
+	state = harness({
+		technologies: { unlockSolarSystem: purchasedTech() },
+		stock: { metal: 1200, gem: 900, oil: 1000, rocketFuel: 21870 },
+		globals: {
+			rocket: 0,
+			rocketLaunched: false,
+			explored: [],
+			buttonsHidden: [],
+			rocketFuelToggled: true,
+		},
+		...options,
+	});
+	const visible = new Map();
+	for (const [name] of solarDestinations) {
+		visible.set(
+			name[0].toLowerCase() + name.slice(1),
+			["Moon", "Venus", "Mars", "AsteroidBelt"].includes(name),
+		);
+		visible.set(`explore${name}`, true);
+	}
+	const original = state.context.document.getElementById;
+	state.context.document.getElementById = (id) =>
+		visible.has(id)
+			? {
+					classList: { contains: () => !visible.get(id) },
+					style: {},
+					parentElement: null,
+				}
+			: original(id);
+	state.available.set("getRocket", true);
+	state.available.set("launchRocket", true);
+	state.context.getRocket = () => {
+		state.context.rocket = 1;
+		state.stock.metal -= 1200;
+		state.stock.gem -= 900;
+		state.stock.oil -= 1000;
+		state.purchases.push("solarRocket");
+	};
+	state.context.launchRocket = () => {
+		state.context.rocket = 0;
+		state.context.rocketLaunched = true;
+		state.stock.rocketFuel -= 20;
+		state.purchases.push("launch");
+	};
+	state.context.explore = (name) => {
+		state.stock.rocketFuel -= solarDestinations.find(([id]) => id === name)[1];
+		state.context.buttonsHidden.push(`explore${name}`);
+		state.context.explored.push(name[0].toLowerCase() + name.slice(1));
+		visible.set(`explore${name}`, false);
+		state.purchases.push(name);
+		if (name === "AsteroidBelt")
+			for (const id of [
+				"wonderStation",
+				"jupiter",
+				"saturn",
+				"pluto",
+				"kuiperBelt",
+			])
+				visible.set(id, true);
+		if (name === "KuiperBelt") visible.set("solCenter", true);
+	};
+	return { ...state, visible };
+}
+
+test("solar exploration builds and launches its own rocket and unlocks the whole system", () => {
+	const state = solarHarness();
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, [
+		"solarRocket",
+		"launch",
+		...solarDestinations.map(([name]) => name),
+	]);
+	assert.equal(state.stock.rocketFuel, 0);
+	assert.match(state.monkey.explorationPlan, /exploration complete/);
+	state.monkey.exploreSolarSystem();
+	assert.equal(state.purchases.length, 12);
+});
+
+test("solar exploration waits at the next destination using live fuel balances", () => {
+	const state = solarHarness({
+		stock: { rocketFuel: 70 },
+		globals: { rocketLaunched: true, explored: [], buttonsHidden: [] },
+	});
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, ["Moon", "Venus"]);
+	assert.equal(state.stock.rocketFuel, 0);
+	assert.match(state.monkey.explorationPlan, /Mars: 80 rocket fuel/);
+	state.stock.rocketFuel = 80;
+	state.monkey.beginTick();
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, ["Moon", "Venus", "Mars"]);
+});
+
+test("solar exploration respects research, hidden navigation, and failed native actions", () => {
+	const state = solarHarness();
+	state.technologies.unlockSolarSystem.current = 0;
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, []);
+	state.technologies.unlockSolarSystem.current = 1;
+	state.available.set("getRocket", false);
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, []);
+	state.available.set("getRocket", true);
+	state.context.getRocket = () => {};
+	state.monkey.exploreSolarSystem();
+	assert.equal(state.context.rocketLaunched, false);
+	state.context.rocketLaunched = true;
+	for (const key of state.visible.keys()) state.visible.set(key, false);
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, []);
+	state.visible.set("moon", true);
+	state.visible.set("exploreMoon", true);
+	state.context.explore = () => {};
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, []);
+	assert.match(state.monkey.explorationPlan, /did not complete/);
+});
+
+test("exploration fuel production uses shared input budgets and honors the player toggle", () => {
+	const state = solarHarness({
+		stock: { rocketFuel: 0 },
+		rates: { oil: 20, charcoal: 20 },
+		globals: {
+			rocketLaunched: true,
+			explored: [],
+			buttonsHidden: [],
+			rocketFuelToggled: true,
+		},
+		machines: [{ name: "chemicalPlant", inputs: { oil: 20, charcoal: 20 } }],
+	});
+	state.monkey.exploreSolarSystem();
+	assert.deepEqual(state.purchases, ["chemicalPlant"]);
+	assert.equal(state.monkey.budget.oil, 0);
+	assert.equal(state.monkey.budget.charcoal, 0);
+	state.monkey.beginTick();
+	state.context.rocketFuelToggled = false;
+	state.monkey.exploreSolarSystem();
+	assert.equal(state.purchases.length, 1);
+	assert.match(state.monkey.explorationPlan, /production is disabled/);
+	assert.equal(state.monkey.emcResources().includes("rocketFuel"), false);
+});
+
+test("main automation off and stale updates postpone exploration", () => {
+	for (const blocker of ["off", "stale"]) {
+		const state = solarHarness();
+		if (blocker === "off") state.monkey.setEnabled(false);
+		if (blocker === "stale")
+			state.context.Game.lastFixedUpdate = Date.now() - 3000;
+		state.monkey.run();
+		assert.equal(state.purchases.includes("launch"), false);
+	}
+});
+
+function batteryHarness(options = {}) {
+	return harness({
+		stock: { metal: 1000, gem: 1000, lunarite: 1000 },
+		technologies: {
+			unlockLabT4: purchasedTech(),
+			unlockBatteries: purchasedTech(),
+			unlockBatteriesT2: purchasedTech(),
+		},
+		...options,
+	});
+}
+
+for (const [price, expected] of [
+	[149, true],
+	[150, true],
+	[151, false],
+]) {
+	test(`battery lower tier at ${price} uses the inclusive half-price rule`, () => {
+		const state = batteryHarness({
+			stock: { metal: 200 },
+			machines: [
+				{ name: "batteryT2", costs: { metal: 300 } },
+				{ name: "battery", costs: { metal: price } },
+			],
+		});
+		state.monkey.buyBatteries();
+		assert.deepEqual(state.purchases, expected ? ["battery"] : []);
+		if (!expected)
+			assert.match(
+				state.monkey.buildingPlans.get("batteries"),
+				/Saving for batteryT2/,
+			);
+	});
+}
+
+test("batteries require purchased tier research and visible controls", () => {
+	for (const blocker of ["research", "control"]) {
+		const state = batteryHarness({
+			machines: [{ name: "battery", costs: { metal: 10 } }],
+		});
+		if (blocker === "research") state.technologies.unlockBatteries.current = 0;
+		if (blocker === "control") state.available.set("getBattery", false);
+		state.monkey.buyBatteries();
+		assert.deepEqual(state.purchases, []);
+	}
+});
+
+test("battery purchases include the T1 discount and preserve interstellar savings", () => {
+	const state = batteryHarness({
+		stock: { metal: 50 },
+		globals: { T1Price: 0.5 },
+		machines: [{ name: "battery", costs: { metal: 100 } }],
+	});
+	state.monkey.interstellarSavings = { metal: 1 };
+	state.monkey.buyBatteries();
+	assert.deepEqual(state.purchases, []);
+	state.monkey.interstellarSavings = null;
+	state.monkey.buyBatteries();
+	assert.deepEqual(state.purchases, ["battery"]);
+	assert.equal(state.monkey.producerCost("batteries", "battery").metal, 50);
+});
+
+test("native battery failures do not report success and each tier builds at most once per tick", () => {
+	const state = batteryHarness({
+		machines: [{ name: "battery", costs: { metal: 10 }, affordable: false }],
+	});
+	state.monkey.buyBatteries();
+	assert.equal(state.monkey.lastAction, null);
+	state.context.getBattery = () => {
+		state.context.battery++;
+		state.purchases.push("battery");
+	};
+	state.monkey.buyBatteries();
+	state.monkey.buyBatteries();
+	assert.deepEqual(state.purchases, ["battery"]);
+});
+
+test("visible Stargaze T5 batteries are purchased without fictitious science research", () => {
+	const state = batteryHarness({
+		machines: [{ name: "batteryT5", costs: { metal: 100 } }],
+	});
+	state.monkey.buyBatteries();
+	assert.deepEqual(state.purchases, ["batteryT5"]);
+});
+
+test("normal automation buys batteries but recovery and the off toggle pause them", () => {
+	for (const blocker of [null, "recovery", "off"]) {
+		const state = batteryHarness({
+			machines: [{ name: "battery", costs: { metal: 10 } }],
+		});
+		if (blocker === "recovery") state.rates.energy = -1;
+		if (blocker === "off") state.monkey.setEnabled(false);
+		state.monkey.run();
+		assert.deepEqual(state.purchases, blocker ? [] : ["battery"]);
+	}
+});
+
+test("15K T1 battery research and construction are allowed while saving for 50M T4 science", () => {
+	const state = harness({
+		stock: { science: 15000, metal: 1000 },
+		technologies: {
+			unlockLabT4: research(50000000),
+			unlockBatteries: research(15000),
+			unlockBatteriesT2: purchasedTech(),
+		},
+		machines: [
+			{ name: "battery", costs: { metal: 100 } },
+			{ name: "batteryT2", costs: { metal: 200 } },
+		],
+	});
+	state.monkey.buyEarlyScience();
+	state.monkey.buyBatteries();
+	assert.deepEqual(state.purchases, ["unlockBatteries", "battery"]);
+	assert.equal(state.technologies.unlockLabT4.current, 0);
+	assert.equal(state.stock.science, 0);
+});
+
+test("production recovery still builds and launches the solar rocket and spends available exploration fuel", () => {
+	const state = solarHarness();
+	state.rates.energy = -100;
+	state.monkey.run();
+	assert.deepEqual(state.purchases, [
+		"solarRocket",
+		"launch",
+		...solarDestinations.map(([name]) => name),
+	]);
+	assert.match(state.monkey.explorationPlan, /exploration complete/);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("recovery exploration waits for fuel without adding fuel producers", () => {
+	const state = solarHarness({
+		stock: { rocketFuel: 0 },
+		rates: { energy: -100, oil: 100, charcoal: 100 },
+		globals: {
+			rocketLaunched: true,
+			explored: [],
+			buttonsHidden: [],
+			rocketFuelToggled: true,
+		},
+		machines: [{ name: "chemicalPlant", inputs: { oil: 20, charcoal: 20 } }],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, []);
+	assert.match(state.monkey.explorationPlan, /Waiting to explore Moon/);
+	assert.match(
+		state.monkey.explorationPlan,
+		/fuel producers wait for production recovery/,
+	);
+	state.stock.rocketFuel = 20;
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["Moon"]);
+});
+
+test("zero-power item producers build during energy recovery despite expensive lower tiers", () => {
+	const state = harness({
+		rates: { energy: -100 },
+		stock: { metal: 1000 },
+		machines: [
+			{ name: "heavyDrill", costs: { metal: 100 }, inputs: { energy: 10 } },
+			{ name: "miner", costs: { metal: 90 } },
+			{ name: "woodcutter" },
+		],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["miner", "woodcutter"]);
+	assert.equal(state.monkey.budget.energy, -100);
+	assert.equal(state.monkey.buildingPlans.has("metal"), false);
+});
+
+test("zero-power producers can consume safely budgeted non-energy inputs", () => {
+	const state = harness({
+		rates: { energy: -1, wood: 10 },
+		machines: [{ name: "woodburner", inputs: { wood: 10 } }],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["woodburner"]);
+	assert.equal(state.monkey.budget.wood, 0);
+	state.monkey.beginTick();
+	state.monkey.budget.wood = 9;
+	state.monkey.buildZeroPowerProducers();
+	assert.equal(state.purchases.length, 1);
+});
+
+test("normal powered ticks also buy zero-power lower tiers once per tick", () => {
+	const state = harness({
+		rates: { energy: 100000 },
+		stock: { energy: 100000, metal: 1000 },
+		machines: [
+			{
+				name: "heavyDrill",
+				costs: { metal: 100 },
+				inputs: { energy: 10 },
+				affordable: false,
+			},
+			{ name: "miner", costs: { metal: 90 } },
+		],
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, ["miner"]);
+});
+
+test("zero-power passes still respect unlocks, full storage, toggles and reserved materials", () => {
+	for (const blocker of ["locked", "full", "toggle", "reserved"]) {
+		const state = harness({
+			stock: { metal: 100 },
+			machines: [
+				{ name: "miner", costs: { metal: 100 }, locked: blocker === "locked" },
+				{ name: "woodburner" },
+			],
+		});
+		state.context.charcoalToggled = false;
+		if (blocker === "full") state.stock.metal = 100000;
+		if (blocker === "toggle") state.context.globalEnergyLock = true;
+		if (blocker === "reserved") state.monkey.interstellarSavings = { metal: 1 };
+		state.monkey.buildZeroPowerProducers();
+		// A global energy lock blocks only powered producers.
+		assert.deepEqual(state.purchases, blocker === "toggle" ? ["miner"] : []);
+	}
 });
