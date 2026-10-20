@@ -1,4 +1,4 @@
-"""Helpers for extracting SBS On Demand episode metadata from series pages."""
+"""Extract and download episodes from SBS On Demand and ABC iview."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from typing import Any
 import click
 import requests
 from loguru import logger
+
+from dotfiles.iview import IViewEpisode, extract_iview_document, iview_episodes, iview_path
 
 JSON_PREFIX = '.streamController.enqueue("'
 JSON_SUFFIX = '\\n");</script>'
@@ -285,14 +287,38 @@ def extract_episode_metadata(payload: list[Any]) -> list[EpisodeMetadata]:
     return episodes
 
 
-def render_output(episodes: list[EpisodeMetadata], as_json: bool) -> str:
+def extract_iview_metadata(url: str, path: list[str]) -> list[IViewEpisode]:
+    if len(path) >= 2 and path[-2] == "video":
+        video_id = path[-1]
+        program = json.loads(CacheUrl(f"https://iview.abc.net.au/api/programs/{video_id}").read_text())
+        return [
+            IViewEpisode(
+                episode_url=f"https://iview.abc.net.au/video/{video_id}",
+                video_id=video_id,
+                series_slug=program["href"].split("/")[1],
+                title=f"{program['seriesTitle']} - {program['title']}",
+            )
+        ]
+    if len(path) not in {2, 4} or path[0] != "show" or (len(path) == 4 and path[2] != "series"):
+        raise click.UsageError("Expected an ABC iview /show/NAME, /show/NAME/series/NUMBER or /video/ID URL")
+    document = extract_iview_document(CacheUrl(url).read_text())
+    episodes = iview_episodes(document, path[1])
+    if len(path) == 2:
+        for series in document["seriesList"]:
+            if series["id"] != document["selectedSeries"]["id"]:
+                series_url = "https://iview.abc.net.au" + series["links"]["deeplink"]
+                episodes.extend(iview_episodes(extract_iview_document(CacheUrl(series_url).read_text()), path[1]))
+    return list({episode.video_id: episode for episode in episodes}.values())
+
+
+def render_output(episodes: list[EpisodeMetadata] | list[IViewEpisode], as_json: bool) -> str:
     if as_json:
         return json.dumps([asdict(episode) for episode in episodes], indent=2)
     return "\n".join(episode.episode_url for episode in episodes)
 
 
 def yt_dlp_command(
-    episodes: list[EpisodeMetadata],
+    episodes: list[EpisodeMetadata] | list[IViewEpisode],
     subs: bool = False,
     handler: DownloadHandler = DownloadHandler.LEGACY,
     netrc_location: Path | None = None,
@@ -303,7 +329,7 @@ def yt_dlp_command(
     cookie_args = ["--cookies-from-browser", cookies_from_browser] if cookies_from_browser else []
     output_args = ["--paths", str(output_dir)] if output_dir else []
     error_args = ["--abort-on-error"]
-    if handler is DownloadHandler.LEGACY:
+    if handler is DownloadHandler.LEGACY or all(isinstance(episode, IViewEpisode) for episode in episodes):
         return [
             "uvx",
             "yt-dlp",
@@ -327,7 +353,7 @@ def yt_dlp_command(
         *cookie_args,
         *output_args,
         *subtitle_args,
-        *(build_watch_url(episode.mpx_media_id) for episode in episodes),
+        *(build_watch_url(episode.mpx_media_id) for episode in episodes if isinstance(episode, EpisodeMetadata)),
     ]
 
 
@@ -340,13 +366,15 @@ def run_yt_dlp(command: list[str]) -> None:
 
 
 def download_episodes(
-    episodes: list[EpisodeMetadata],
+    episodes: list[EpisodeMetadata] | list[IViewEpisode],
     subs: bool = False,
     handler: DownloadHandler = DownloadHandler.LEGACY,
     login: bool = False,
     cookies_from_browser: str | None = None,
     output_dir: Path | None = None,
 ) -> None:
+    if login and any(isinstance(episode, IViewEpisode) for episode in episodes):
+        raise click.UsageError("--login is only supported for SBS; use --cookies-from-browser for ABC iview")
     if not login:
         run_yt_dlp(
             yt_dlp_command(
@@ -383,7 +411,19 @@ def download_episodes(
         )
 
 
-@click.command()
+def extract_metadata(url: str) -> list[EpisodeMetadata] | list[IViewEpisode]:
+    path = iview_path(url)
+    if path is not None:
+        return extract_iview_metadata(url, path)
+    payload = extract_json(CacheUrl(url).read_text())
+    try:
+        episodes = extract_episode_metadata(payload)
+    except ValueError:
+        episodes = []
+    return episodes or extract_movie_metadata(payload, url)
+
+
+@click.command(help="List or download SBS On Demand and ABC iview episodes.")
 @click.argument("url")
 @click.option("--json", "as_json", is_flag=True, help="Emit structured episode metadata as JSON")
 @click.option("--download", is_flag=True, help="Pass extracted episode URLs to yt-dlp")
@@ -413,17 +453,13 @@ def main(
     logger.remove()
     logger.add(sys.stderr, level="DEBUG" if debug else "INFO")
 
-    response = CacheUrl(url)
-    payload = extract_json(response.read_text())
     try:
-        episodes = extract_episode_metadata(payload)
-    except ValueError:
-        episodes = []
-    if not episodes:
-        episodes = extract_movie_metadata(payload, url)
+        episodes = extract_metadata(url)
+    except (ValueError, KeyError, TypeError, requests.RequestException) as error:
+        raise click.ClickException(f"Could not extract episode metadata: {error}") from error
 
     if not episodes:
-        logger.error("No content found in decoded SBS payload")
+        logger.error("No content found on this page")
         raise SystemExit(1)
 
     if download:

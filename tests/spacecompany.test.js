@@ -2744,3 +2744,103 @@ test("zero-power passes still respect unlocks, full storage, toggles and reserve
 		assert.deepEqual(state.purchases, blocker === "toggle" ? ["miner"] : []);
 	}
 });
+
+const tierFiveResources = [
+	["uranium", "planetNuke"],
+	["lava", "condensator"],
+	["oil", "fossilator"],
+	["metal", "multiDrill"],
+	["gem", "diamondChamber"],
+	["charcoal", "microPollutor"],
+	["wood", "forest"],
+	["silicon", "tardis"],
+	["lunarite", "cloner"],
+	["methane", "interCow"],
+	["titanium", "club"],
+	["gold", "philosopher"],
+	["silver", "werewolf"],
+	["hydrogen", "harvester"],
+	["helium", "cage"],
+	["ice", "overexchange"],
+];
+
+test("normal ticks purchase all native T5 resource producers once unlocked and budget their inputs", () => {
+	const state = harness({
+		rates: Object.fromEntries(resourceIds.map((id) => [id, 1000000])),
+		stock: {
+			...Object.fromEntries(resourceIds.map((id) => [id, 1000])),
+			energy: 10000,
+		},
+		machines: tierFiveResources.map(([, name]) => ({
+			name,
+			inputs: { energy: 5 },
+			costs: { metal: 100 },
+			locked: true,
+		})),
+	});
+	state.monkey.run();
+	assert.deepEqual(state.purchases, []);
+	for (const [resource, producer] of tierFiveResources) {
+		assert.equal(state.monkey.producers[resource][0], producer);
+		state.available.set(
+			`get${producer[0].toUpperCase()}${producer.slice(1)}`,
+			true,
+		);
+	}
+	state.monkey.run();
+	assert.deepEqual(
+		[...state.purchases].sort(),
+		tierFiveResources.map(([, name]) => name).sort(),
+	);
+	assert.equal(state.monkey.budget.energy, 1000000 - 16 * 5);
+	assert.deepEqual(state.canceled, []);
+});
+
+test("resource tier balancing compares T4 against the next unlocked T5", () => {
+	const state = harness({
+		rates: { energy: 1000 },
+		machines: [
+			{
+				name: "multiDrill",
+				inputs: { energy: 10 },
+				costs: { metal: 100 },
+				locked: true,
+				affordable: false,
+			},
+			{ name: "quantumDrill", inputs: { energy: 5 }, costs: { metal: 51 } },
+		],
+	});
+	state.monkey.buildProducers("metal");
+	assert.deepEqual(state.purchases, ["quantumDrill"]);
+	state.monkey.beginTick();
+	state.available.set("getMultiDrill", true);
+	state.monkey.buildProducers("metal");
+	assert.equal(state.purchases.length, 1);
+	assert.match(
+		state.monkey.buildingPlans.get("metal"),
+		/Saving for multiDrill/,
+	);
+	state.context.quantumDrillMetalCost = 50;
+	state.monkey.beginTick();
+	state.monkey.buildProducers("metal");
+	assert.deepEqual(state.purchases, ["quantumDrill", "quantumDrill"]);
+});
+
+test("Stargaze T5 labs build without T5 science research, including during power recovery", () => {
+	for (const recovering of [false, true]) {
+		const state = harness({
+			rates: { energy: recovering ? -100 : 1000 },
+			machines: [
+				{ name: "labT5", costs: { metal: 100 }, locked: true },
+				{ name: "labT4" },
+			],
+		});
+		state.monkey.run();
+		assert.deepEqual(state.purchases, ["labT4"]);
+		state.available.set("getLabT5", true);
+		state.monkey.run();
+		assert.deepEqual(state.purchases, ["labT4", "labT5", "labT4"]);
+		assert.equal(state.technologies.unlockLabT5, undefined);
+		assert.deepEqual(state.canceled, []);
+	}
+});
