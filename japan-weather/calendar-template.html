@@ -1,0 +1,60 @@
+<div id="japan-weather">
+  <style>
+    #japan-weather .weather-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:12px 0}
+    #japan-weather .weather-day {min-height:112px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;text-align:left;overflow-wrap:anywhere}
+    #japan-weather .weather-date {font-weight:500}
+    #japan-weather .weather-detail {display:block;margin:12px 0;min-height:100px}
+    #japan-weather .weather-head {text-align:center;color:var(--muted-foreground)}
+    #japan-weather .weather-key {display:flex;gap:16px;flex-wrap:wrap}
+    #japan-weather .forecast-mark {display:inline-block;width:8px;height:8px;background:var(--viz-series-1);border-radius:50%;margin-right:4px}
+    #japan-weather .average-mark {display:inline-block;width:8px;height:8px;background:var(--muted-foreground);border-radius:50%;margin-right:4px}
+    @media(max-width:600px){#japan-weather .weather-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#japan-weather .weather-head,#japan-weather .weather-blank{display:none}#japan-weather .weather-day{min-height:106px}}
+  </style>
+  <h2>Japan · 28 Oct–18 Nov 2026</h2>
+  <div class="weather-key text-small"><span><span class="forecast-mark"></span>Forecast</span><span><span class="average-mark"></span>Seasonal average</span><span>High / low · °C · Japan dates</span></div>
+  <div class="weather-grid" aria-label="Trip weather calendar"></div>
+  <output class="weather-detail" aria-live="polite"></output>
+</div>
+<script>
+{
+  const root = document.getElementById('japan-weather');
+  const days = DATA_PLACEHOLDER;
+  const grid = root.querySelector('.weather-grid');
+  const output = root.querySelector('output');
+  const weekdayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const buttons = [];
+  const show = index => {
+    const day = days[index];
+    buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === index)));
+    output.replaceChildren();
+    const title = document.createElement('strong');
+    title.textContent = `${day.date} · ${day.place} · ${day.high}° / ${day.low}°C`;
+    const detail = document.createElement('div');
+    detail.textContent = `${day.kind}. ${day.detail}`;
+    const source = document.createElement(day.url ? 'a' : 'div');
+    source.textContent = day.url ? `JMA daily normals · ${day.station} station` : 'Weather service forecast · checked 23 Oct 2026';
+    if (day.url) {source.href=day.url;source.target='_blank';source.rel='noopener noreferrer';}
+    output.append(title, detail, source);
+  };
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(name => {
+    const label = document.createElement('div');label.className='weather-head text-small';label.textContent=name;grid.append(label);
+  });
+  for(let i=0;i<2;i++){const blank=document.createElement('div');blank.className='weather-blank';grid.append(blank);}
+  days.forEach((day,index)=>{
+    const date=new Date(`${day.date}T12:00:00Z`);
+    const button=document.createElement('button');button.type='button';button.className='btn viz-tile';
+    button.setAttribute('aria-pressed',String(index===0));
+    button.setAttribute('aria-label',`${day.date}, ${day.place}, ${day.kind}, high ${day.high}, low ${day.low} degrees Celsius`);
+    const contents=document.createElement('span');contents.className='weather-day';
+    const label=document.createElement('span');label.className='weather-date';label.textContent=`${weekdayNames[date.getUTCDay()]} ${date.getUTCDate()} ${date.getUTCMonth()===9?'Oct':'Nov'}`;
+    const place=document.createElement('span');place.textContent=day.place;
+    const temp=document.createElement('span');temp.className='tabular-nums';temp.textContent=`${day.high}° / ${day.low}°`;
+    const type=document.createElement('span');type.className='text-small';
+    const dot=document.createElement('span');dot.className=day.kind==='Forecast'?'forecast-mark':'average-mark';dot.setAttribute('aria-hidden','true');
+    type.append(dot,document.createTextNode(day.kind==='Forecast'?'Forecast':'Average'));
+    contents.append(label,place,temp,type);button.append(contents);button.addEventListener('click',()=>show(index));
+    buttons.push(button);grid.append(button);
+  });
+  show(0);
+}
+</script>
